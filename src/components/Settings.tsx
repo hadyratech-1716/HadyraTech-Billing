@@ -10,7 +10,7 @@ import {
 export default function Settings() {
   const { 
     activeBusiness, updateBusiness, firebaseConfig, saveFirebaseConfig, 
-    disconnectFirebase, syncStatus, exportBackup, importBackup, resetToMock 
+    disconnectFirebase, syncStatus, syncError, exportBackup, importBackup, resetToMock 
   } = useDb();
 
   // Profile forms
@@ -250,6 +250,12 @@ export default function Settings() {
             {firebaseConfig ? (
               <div className="space-y-3.5 text-xs text-brand-gray">
                 <p>Application is synchronized with Cloud Firestore. Offline changes sync automatically in the background.</p>
+                {syncStatus === "error" && syncError && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 font-mono text-[10px] space-y-1">
+                    <p className="font-bold flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> Sync Connection Error:</p>
+                    <p className="break-words leading-relaxed">{syncError}</p>
+                  </div>
+                )}
                 <div className="p-3 bg-slate-950/60 border border-slate-900 rounded-xl space-y-1.5 font-mono text-[10px]">
                   <p className="truncate">Project ID: <span className="text-slate-350">{firebaseConfig.projectId}</span></p>
                   <p className="truncate">API Key: <span className="text-slate-350">{firebaseConfig.apiKey.substring(0, 15)}...</span></p>
@@ -265,6 +271,13 @@ export default function Settings() {
             ) : (
               <form onSubmit={handleCloudSubmit} className="space-y-3.5 text-xs">
                 <p className="text-brand-gray leading-normal">Enter your Firebase Web App credentials to connect. Your local offline database will automatically synchronize.</p>
+                
+                {syncStatus === "error" && syncError && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-455 font-mono text-[10px] space-y-1">
+                    <p className="font-bold flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-rose-400" /> Connection Error:</p>
+                    <p className="break-words leading-relaxed text-rose-350">{syncError}</p>
+                  </div>
+                )}
                 
                 <div className="space-y-1">
                   <label className="text-slate-400 font-semibold flex items-center gap-1"><Link2 className="w-3.5 h-3.5" /> Project ID</label>

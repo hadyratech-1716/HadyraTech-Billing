@@ -131,6 +131,7 @@ export interface DbContextType {
   logs: AuditLog[];
   authorizedUsers: AuthorizedUser[];
   syncStatus: "idle" | "syncing" | "synced" | "error";
+  syncError: string | null;
   firebaseConfig: { apiKey: string; projectId: string; appId: string } | null;
   
   // Auth actions
@@ -556,6 +557,7 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "synced" | "error">("idle");
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [firebaseConfig, setFirebaseConfig] = useState<{ apiKey: string; projectId: string; appId: string } | null>(null);
   const [firebaseDb, setFirebaseDb] = useState<any>(null);
 
@@ -607,8 +609,11 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
               setAuthorizedUsers(list);
               localStorage.setItem("hadyra_authorized_users", JSON.stringify(list));
             }
-          } catch (e) {
+            setSyncError(null);
+          } catch (e: any) {
             console.error("Failed to fetch authorized users", e);
+            setSyncStatus("error");
+            setSyncError(e.message || "Failed to fetch authorized users from Firestore");
           }
         };
         fetchAuth();
@@ -1255,6 +1260,7 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const saveFirebaseConfig = async (apiKey: string, projectId: string, appId: string): Promise<boolean> => {
     try {
       setSyncStatus("syncing");
+      setSyncError(null);
       const config = {
         apiKey,
         authDomain: `${projectId}.firebaseapp.com`,
@@ -1313,10 +1319,12 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       setFirebaseDb(db);
       localStorage.setItem("hadyra_firebase_config", JSON.stringify({ apiKey, projectId, appId }));
       setSyncStatus("synced");
+      setSyncError(null);
       addLogLocal("CLOUD_CONNECT", `Connected to cloud database (Firestore): ${projectId}`);
       return true;
     } catch (e: any) {
       setSyncStatus("error");
+      setSyncError(e.message || "Failed to establish database connection.");
       addLogLocal("CLOUD_CONNECT_FAIL", `Firestore registration failed: ${e.message}`);
       return false;
     }
@@ -1327,6 +1335,7 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     setFirebaseDb(null);
     localStorage.removeItem("hadyra_firebase_config");
     setSyncStatus("idle");
+    setSyncError(null);
     addLogLocal("CLOUD_DISCONNECT", "Cloud database synchronization disconnected.");
   };
 
@@ -1334,11 +1343,13 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const syncToCloud = async () => {
     if (!firebaseDb) {
       setSyncStatus("error");
+      setSyncError("Firebase database is not connected.");
       return;
     }
 
     try {
       setSyncStatus("syncing");
+      setSyncError(null);
 
       // Helper to batch set items in Firestore using chunks of 400
       const commitBatchInChunks = async (collectionName: string, itemsList: any[]) => {
@@ -1398,9 +1409,11 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       }
 
       setSyncStatus("synced");
+      setSyncError(null);
       addLogLocal("CLOUD_SYNC", "Manual sync completed. All offline records pushed to Firestore.");
     } catch (e: any) {
       setSyncStatus("error");
+      setSyncError(e.message || "Bulk synchronization failed.");
       addLogLocal("CLOUD_SYNC_FAIL", `Cloud database synchronization failed: ${e.message}`);
     }
   };
@@ -1484,6 +1497,7 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         logs,
         authorizedUsers,
         syncStatus,
+        syncError,
         firebaseConfig,
         login,
         logout,

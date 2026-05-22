@@ -10,8 +10,8 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export default function UsersAdmin() {
   const { 
-    authorizedUsers, addAuthorizedUser, updateAuthorizedUser, deleteAuthorizedUser, 
-    firebaseConfig, syncStatus, syncToCloud 
+    authorizedUsers, addAuthorizedUser, updateAuthorizedUser, deleteAuthorizedUser,
+    firebaseConfig, syncStatus, syncError, syncToCloud 
   } = useDb();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -120,27 +120,39 @@ export default function UsersAdmin() {
           <div className="flex gap-4 items-start">
             <div className={`p-3 rounded-2xl border ${
               firebaseConfig 
-                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+                ? (syncStatus === "error" ? "bg-rose-500/10 border-rose-500/20 text-rose-455" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400") 
                 : "bg-amber-500/10 border-amber-500/20 text-amber-400"
             }`}>
-              {firebaseConfig ? <CheckCircle className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />}
+              {firebaseConfig 
+                ? (syncStatus === "error" ? <AlertTriangle className="w-6 h-6" /> : <CheckCircle className="w-6 h-6" />)
+                : <AlertTriangle className="w-6 h-6" />
+              }
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-white text-md font-display">
-                  {firebaseConfig ? "Firebase Firestore Connected" : "Local Sandbox Environment Mode"}
+                  {firebaseConfig 
+                    ? (syncStatus === "error" ? "Firestore Sync Connection Error" : "Firebase Firestore Connected")
+                    : "Local Sandbox Environment Mode"
+                  }
                 </h3>
                 <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
                   firebaseConfig 
-                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                    ? (syncStatus === "error" ? "bg-rose-500/10 text-rose-400 border border-rose-500/20" : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20") 
                     : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                 }`}>
-                  {firebaseConfig ? "Cloud Live" : "Local Store Only"}
+                  {firebaseConfig 
+                    ? (syncStatus === "error" ? "Sync Error" : "Cloud Live") 
+                    : "Local Store Only"
+                  }
                 </span>
               </div>
               <p className="text-xs text-brand-gray mt-1 max-w-2xl">
                 {firebaseConfig 
-                  ? `Your user registry is active. Changes are synced with Firestore project "${firebaseConfig.projectId}".`
+                  ? (syncStatus === "error" && syncError
+                      ? `Sync failed: ${syncError}`
+                      : `Your user registry is active. Changes are synced with Firestore project "${firebaseConfig.projectId}".`
+                    )
                   : "All changes are cached locally in your browser storage. Connect your Firebase project inside the Control Panel (Settings) to synchronize database tables across other machines."
                 }
               </p>
