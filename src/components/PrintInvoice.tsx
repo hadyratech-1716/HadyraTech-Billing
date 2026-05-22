@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useDb } from "@/context/DbContext";
 import { Printer, X, FileText, Smartphone, CreditCard, Building } from "lucide-react";
 
@@ -10,8 +10,23 @@ interface PrintInvoiceProps {
 }
 
 export default function PrintInvoice({ invoiceId, onClose }: PrintInvoiceProps) {
-  const { invoices, customers, activeBusiness } = useDb();
+  const { invoices, customers, activeBusiness, currentUser } = useDb();
   const [template, setTemplate] = useState<"a4" | "thermal">("a4");
+
+  const [upiId, setUpiId] = useState("6048894526@KKBK0008488.ifsc.npci");
+  const [bankDetails, setBankDetails] = useState(`👋 Hello! Here are my account details:
+1️⃣ A/c no.: 6048894526
+2️⃣ IFSC Code: KKBK0008488
+3️⃣ Home branch: ANNA NAGAR, CHENNAI`);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedUpi = localStorage.getItem("hadyra_merchant_upi");
+      if (storedUpi) setUpiId(storedUpi);
+      const storedBank = localStorage.getItem("hadyra_bank_details");
+      if (storedBank) setBankDetails(storedBank);
+    }
+  }, []);
 
   // Find invoice details
   const invoice = useMemo(() => {
@@ -166,7 +181,7 @@ export default function PrintInvoice({ invoiceId, onClose }: PrintInvoiceProps) 
                   <div className="text-right">
                     <img
                       src={`https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(
-                        `upi://pay?pa=demo@upi&pn=${activeBusiness.name}&am=${invoice.total_amount.toFixed(2)}&cu=INR&tn=${invoice.invoice_number}`
+                        `upi://pay?pa=${upiId}&pn=${activeBusiness.name}&am=${invoice.total_amount.toFixed(2)}&cu=INR&tn=${invoice.invoice_number}`
                       )}`}
                       alt="UPI Pay QR"
                       className="w-16 h-16 border border-slate-100 rounded p-0.5 ml-auto"
@@ -235,9 +250,9 @@ export default function PrintInvoice({ invoiceId, onClose }: PrintInvoiceProps) 
                 <p>3. Payments are requested within 15 days of billing date.</p>
                 <div className="pt-2">
                   <span className="text-slate-800 font-bold block">BANK TRANSFER DIRECT DETAILS:</span>
-                  <p>Bank: HDFC Bank Ltd | Branch: BKC Complex</p>
-                  <p>A/C Name: Hadyra Tech Solutions Private Ltd</p>
-                  <p>A/C No: 50200084792345 | IFSC Code: HDFC0000060</p>
+                  {bankDetails.split("\n").map((line, i) => (
+                    <p key={i}>{line}</p>
+                  ))}
                 </div>
               </div>
 
@@ -292,7 +307,7 @@ export default function PrintInvoice({ invoiceId, onClose }: PrintInvoiceProps) 
           {/* Signature panel */}
           <div className="flex justify-between items-end border-t border-slate-100 pt-8 mt-12 text-[10px] text-slate-500">
             <div>
-              <p>Issued by: Aman Gupta (System Administrator)</p>
+              <p>Issued by: {currentUser?.full_name || "Saaqib"} ({currentUser?.role === "admin" ? "System Administrator" : "Billing Employee"})</p>
               <p className="mt-1">Generated: {new Date(invoice.created_at).toLocaleString()}</p>
             </div>
             <div className="text-right w-48 border-t border-slate-300 pt-4">
@@ -328,7 +343,7 @@ export default function PrintInvoice({ invoiceId, onClose }: PrintInvoiceProps) 
             </div>
             <div className="flex justify-between">
               <span>Cashier:</span>
-              <span>Aman Gupta</span>
+              <span>{currentUser?.full_name || "Saaqib"}</span>
             </div>
             {customer && (
               <div className="flex justify-between pt-1 font-semibold">
@@ -406,7 +421,7 @@ export default function PrintInvoice({ invoiceId, onClose }: PrintInvoiceProps) 
               <div className="inline-block p-1 bg-white border border-slate-200 rounded">
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
-                    `upi://pay?pa=demo@upi&pn=${activeBusiness.name}&am=${invoice.total_amount.toFixed(2)}&cu=INR&tn=${invoice.invoice_number}`
+                    `upi://pay?pa=${upiId}&pn=${activeBusiness.name}&am=${invoice.total_amount.toFixed(2)}&cu=INR&tn=${invoice.invoice_number}`
                   )}`}
                   alt="UPI Receipt Scan"
                   className="w-20 h-20"

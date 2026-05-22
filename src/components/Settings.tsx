@@ -20,7 +20,8 @@ export default function Settings() {
   const [bizEmail, setBizEmail] = useState("");
   const [bizAddress, setBizAddress] = useState("");
   const [bizPrefix, setBizPrefix] = useState("");
-  const [upiId, setUpiId] = useState("merchant@upi");
+  const [upiId, setUpiId] = useState("6048894526@KKBK0008488.ifsc.npci");
+  const [bankDetails, setBankDetails] = useState("");
 
   // Supabase forms
   const [sbUrl, setSbUrl] = useState("");
@@ -42,6 +43,15 @@ export default function Settings() {
       setSbUrl(supabaseConfig.url);
       setSbKey(supabaseConfig.anonKey);
     }
+
+    const storedUpi = localStorage.getItem("hadyra_merchant_upi");
+    setUpiId(storedUpi || "6048894526@KKBK0008488.ifsc.npci");
+
+    const storedBank = localStorage.getItem("hadyra_bank_details");
+    setBankDetails(storedBank || `👋 Hello! Here are my account details:
+1️⃣ A/c no.: 6048894526
+2️⃣ IFSC Code: KKBK0008488
+3️⃣ Home branch: ANNA NAGAR, CHENNAI`);
   }, [activeBusiness, supabaseConfig]);
 
   const handleProfileSubmit = (e: React.FormEvent) => {
@@ -59,6 +69,7 @@ export default function Settings() {
 
     // Save local UPI details to localStorage for POS reference
     localStorage.setItem("hadyra_merchant_upi", upiId);
+    localStorage.setItem("hadyra_bank_details", bankDetails);
     alert("Business configurations updated successfully!");
   };
 
@@ -191,6 +202,17 @@ export default function Settings() {
                   value={bizAddress}
                   onChange={(e) => setBizAddress(e.target.value)}
                   className="w-full px-4 py-2 rounded-xl glass-input focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-400 font-semibold">Bank Account Details (Printed on Invoices)</label>
+                <textarea
+                  rows={4}
+                  value={bankDetails}
+                  onChange={(e) => setBankDetails(e.target.value)}
+                  className="w-full px-4 py-2 rounded-xl glass-input focus:outline-none font-mono text-xs text-slate-300"
+                  placeholder="Enter bank details..."
                 />
               </div>
 

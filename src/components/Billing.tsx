@@ -56,6 +56,15 @@ export default function Billing({ onPrintInvoice, onShareInvoice }: {
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const recognitionRef = useRef<any>(null);
 
+  // UPI configuration from settings
+  const [upiId, setUpiId] = useState("6048894526@KKBK0008488.ifsc.npci");
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("hadyra_merchant_upi");
+      if (stored) setUpiId(stored);
+    }
+  }, []);
+
   // Focus ref for barcode scanning
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -701,7 +710,7 @@ export default function Billing({ onPrintInvoice, onShareInvoice }: {
                 <div className="inline-block p-2.5 bg-white rounded-xl shadow-lg">
                   <img
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-                      `upi://pay?pa=demo@upi&pn=${activeBusiness.name}&am=${calculations.totalAmount.toFixed(2)}&cu=INR&tn=POS-BILL`
+                      `upi://pay?pa=${upiId}&pn=${activeBusiness.name}&am=${calculations.totalAmount.toFixed(2)}&cu=INR&tn=POS-BILL`
                     )}`}
                     alt="UPI QR Code"
                     className="w-32 h-32"

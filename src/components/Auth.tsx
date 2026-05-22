@@ -10,7 +10,7 @@ export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("admin@hadyratech.com");
   const [password, setPassword] = useState("••••••••");
-  const [name, setName] = useState("Aman Gupta");
+  const [name, setName] = useState("Saaqib");
   const [companyName, setCompanyName] = useState("Hadyra Tech Hub");
   const [role, setRole] = useState<"admin" | "employee">("admin");
   

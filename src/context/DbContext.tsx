@@ -474,7 +474,7 @@ const MOCK_AUDIT_LOGS: AuditLog[] = [
   {
     id: "log-1",
     business_id: "bus-1",
-    user_name: "Aman Gupta (Admin)",
+    user_name: "Saaqib (Admin)",
     action: "SYSTEM_INITIALIZE",
     details: "Hadyra Billing engine successfully initialized.",
     created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -482,7 +482,7 @@ const MOCK_AUDIT_LOGS: AuditLog[] = [
   {
     id: "log-2",
     business_id: "bus-1",
-    user_name: "Aman Gupta (Admin)",
+    user_name: "Saaqib (Admin)",
     action: "PRODUCT_ADD",
     details: "Added new product: Bubble Wrap Roll (100 meters)",
     created_at: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString()
@@ -490,7 +490,7 @@ const MOCK_AUDIT_LOGS: AuditLog[] = [
   {
     id: "log-3",
     business_id: "bus-1",
-    user_name: "Aman Gupta (Admin)",
+    user_name: "Saaqib (Admin)",
     action: "INVOICE_CREATE",
     details: "Issued Invoice #HT-INV-101 to Global Logistics & Co. (Total: ₹11,300.00)",
     created_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString()
@@ -542,7 +542,7 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         setCurrentUser({
           id: "user-1",
           email: "admin@hadyratech.com",
-          full_name: "Aman Gupta",
+          full_name: "Saaqib",
           role: "admin",
           active_business_id: "bus-1"
         });
@@ -551,7 +551,7 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       const defaultUser: Profile = {
         id: "user-1",
         email: "admin@hadyratech.com",
-        full_name: "Aman Gupta",
+        full_name: "Saaqib",
         role: "admin",
         active_business_id: "bus-1"
       };
@@ -645,7 +645,7 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Auth Operations
   const login = (email: string, role: "admin" | "employee"): boolean => {
     // Basic verification simulation
-    const name = role === "admin" ? "Aman Gupta" : "Vikram Mehta";
+    const name = role === "admin" ? "Saaqib" : "Vikram Mehta";
     const loggedUser: Profile = {
       id: role === "admin" ? "user-1" : "user-2",
       email,
