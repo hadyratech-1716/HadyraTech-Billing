@@ -79,10 +79,17 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Custom print layouts */
 @media print {
-  body {
+  html, body {
     background: white !important;
+    background-color: white !important;
     color: black !important;
     font-size: 12px;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   
   .no-print {
@@ -98,6 +105,56 @@ h1, h2, h3, h4, h5, h6 {
     border: none !important;
     backdrop-filter: none !important;
     box-shadow: none !important;
+  }
+
+  /* Reset outer print background wrapper to avoid dark colors and outer margins */
+  .no-print-bg {
+    background: white !important;
+    background-color: white !important;
+    color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    min-height: auto !important;
+    width: 100% !important;
+  }
+
+  /* Format A4 & Thermal cards for print page */
+  .print-invoice-card {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important; /* Fixes blank page overflow */
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+  }
+
+  /* Ensure text colors are high-contrast and readable in print */
+  .print-invoice-card h1,
+  .print-invoice-card h2,
+  .print-invoice-card h3,
+  .print-invoice-card h4,
+  .print-invoice-card p,
+  .print-invoice-card span,
+  .print-invoice-card td,
+  .print-invoice-card th,
+  .print-invoice-card div {
+    color: #000000 !important;
+  }
+
+  .print-invoice-card .text-slate-400,
+  .print-invoice-card .text-slate-500,
+  .print-invoice-card .text-brand-gray {
+    color: #4b5563 !important; /* Darker gray for paper readability */
+  }
+
+  .print-invoice-card .text-\[\#0A6CFF\],
+  .print-invoice-card .text-brand-blue {
+    color: #004ecc !important; /* Darker blue for clear printing */
   }
 }
 

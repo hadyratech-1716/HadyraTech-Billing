@@ -111,7 +111,7 @@ export default function PrintInvoice({ invoiceId, onClose }: PrintInvoiceProps) 
       {template === "a4" ? (
         
         /* A4 Elegant Business Invoice Template */
-        <div className="w-full max-w-4xl bg-white text-black p-8 md:p-12 shadow-2xl rounded-sm border border-slate-200 font-sans min-h-[11in] flex flex-col justify-between">
+        <div className="print-invoice-card w-full max-w-4xl bg-white text-black p-8 md:p-12 shadow-2xl rounded-sm border border-slate-200 font-sans min-h-[11in] flex flex-col justify-between">
           <div>
             
             {/* Invoice Top Meta: Logo and Seller Info */}
@@ -141,7 +141,7 @@ export default function PrintInvoice({ invoiceId, onClose }: PrintInvoiceProps) 
 
             {/* Billing Addresses Info */}
             <div className="grid grid-cols-2 gap-8 mb-8">
-              <div className="p-4 bg-slate-50 rounded-xl">
+              <div className="p-4 bg-slate-50 border border-slate-250 rounded-xl">
                 <span className="text-[9px] text-slate-400 font-bold block uppercase tracking-wider mb-2">BILLED TO (BUYER)</span>
                 {customer ? (
                   <div className="text-xs space-y-1">
@@ -156,7 +156,7 @@ export default function PrintInvoice({ invoiceId, onClose }: PrintInvoiceProps) 
                   <p className="text-xs text-slate-500 italic">Cash Registry Walk-In Customer</p>
                 )}
               </div>
-              <div className="p-4 bg-slate-50 rounded-xl flex justify-between items-center">
+              <div className="p-4 bg-slate-50 border border-slate-250 rounded-xl flex justify-between items-center">
                 <div>
                   <span className="text-[9px] text-slate-400 font-bold block uppercase tracking-wider mb-1">INVOICE STANDING</span>
                   <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded ${
@@ -320,7 +320,7 @@ export default function PrintInvoice({ invoiceId, onClose }: PrintInvoiceProps) 
       ) : (
         
         /* Monospaced 3-inch (80mm) POS Thermal Receipt Template */
-        <div className="w-[80mm] bg-white text-black p-4 shadow-2xl rounded-sm border border-slate-200 font-mono text-[10px] leading-tight select-all">
+        <div className="print-invoice-card w-[80mm] bg-white text-black p-4 shadow-2xl rounded-sm border border-slate-200 font-mono text-[10px] leading-tight select-all">
           <div className="text-center border-b border-dashed border-slate-400 pb-3 mb-3">
             <h2 className="text-xs font-bold uppercase">{activeBusiness?.name}</h2>
             <p className="text-[8px] text-slate-500 mt-1">{activeBusiness?.address}</p>
