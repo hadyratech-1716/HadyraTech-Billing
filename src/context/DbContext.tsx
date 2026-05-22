@@ -534,6 +534,16 @@ const MOCK_AUTHORIZED_USERS: AuthorizedUser[] = [
   }
 ];
 
+// Helper to wrap promises with a timeout to prevent hanging on network/database issues
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, errorMessage = "Operation timed out"): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    )
+  ]);
+};
+
 export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // State variables
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
@@ -588,7 +598,7 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         const fetchAuth = async () => {
           try {
             const colRef = collection(dbInstance, "authorized_users");
-            const snap = await getDocs(colRef);
+            const snap = await withTimeout(getDocs(colRef), 3000, "Fetch authorized users timed out");
             const list: AuthorizedUser[] = [];
             snap.forEach((docRef) => {
               list.push(docRef.data() as AuthorizedUser);
@@ -689,9 +699,9 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     try {
       const docRef = doc(firebaseDb, collectionName, docId);
       if (deleteOp) {
-        await deleteDoc(docRef);
+        await withTimeout(deleteDoc(docRef), 5000, `Delete doc ${docId} from ${collectionName} timed out`);
       } else {
-        await setDoc(docRef, data, { merge: true });
+        await withTimeout(setDoc(docRef, data, { merge: true }), 5000, `Set doc ${docId} in ${collectionName} timed out`);
       }
     } catch (err) {
       console.error(`Error writing to Firestore collection ${collectionName}:`, err);
@@ -1269,12 +1279,12 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       
       // Test the Firestore connection by doing a getDocs from businesses collection
       const testRef = collection(db, "businesses");
-      await getDocs(testRef);
+      await withTimeout(getDocs(testRef), 5000, "Connection timed out. Please check your Firestore setup, rules, or internet connection.");
 
       // Sync authorized users from/to Firestore on connection
       try {
         const colRef = collection(db, "authorized_users");
-        const snap = await getDocs(colRef);
+        const snap = await withTimeout(getDocs(colRef), 5000, "Fetch authorized users timed out");
         const list: AuthorizedUser[] = [];
         snap.forEach((docRef) => {
           list.push(docRef.data() as AuthorizedUser);
@@ -1293,7 +1303,7 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
             const uRef = doc(db, "authorized_users", user.id);
             batch.set(uRef, user);
           }
-          await batch.commit();
+          await withTimeout(batch.commit(), 5000, "Initializing authorized users in Firestore timed out");
         }
       } catch (err) {
         console.error("Failed to sync authorized users on connection:", err);
@@ -1341,14 +1351,14 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
           count++;
           
           if (count === 400) {
-            await currentBatch.commit();
+            await withTimeout(currentBatch.commit(), 5000, `Syncing ${collectionName} timed out`);
             currentBatch = writeBatch(firebaseDb);
             count = 0;
           }
         }
         
         if (count > 0) {
-          await currentBatch.commit();
+          await withTimeout(currentBatch.commit(), 5000, `Syncing ${collectionName} timed out`);
         }
       };
       
