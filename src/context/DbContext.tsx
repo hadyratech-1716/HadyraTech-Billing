@@ -123,7 +123,7 @@ export interface DbContextType {
   supabaseConfig: { url: string; anonKey: string } | null;
   
   // Auth actions
-  login: (email: string, role: "admin" | "employee") => boolean;
+  login: (email: string, role: "admin" | "employee", customName?: string, customCompanyName?: string) => boolean;
   logout: () => void;
   
   // Business actions
@@ -539,24 +539,10 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       try {
         setCurrentUser(JSON.parse(storedUser));
       } catch (e) {
-        setCurrentUser({
-          id: "user-1",
-          email: "admin@hadyratech.com",
-          full_name: "Saaqib",
-          role: "admin",
-          active_business_id: "bus-1"
-        });
+        setCurrentUser(null);
       }
     } else {
-      const defaultUser: Profile = {
-        id: "user-1",
-        email: "admin@hadyratech.com",
-        full_name: "Saaqib",
-        role: "admin",
-        active_business_id: "bus-1"
-      };
-      setCurrentUser(defaultUser);
-      localStorage.setItem("hadyra_user", JSON.stringify(defaultUser));
+      setCurrentUser(null);
     }
 
     // Populate data
@@ -643,15 +629,57 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   };
 
   // Auth Operations
-  const login = (email: string, role: "admin" | "employee"): boolean => {
+  const login = (
+    email: string,
+    role: "admin" | "employee",
+    customName?: string,
+    customCompanyName?: string
+  ): boolean => {
     // Basic verification simulation
-    const name = role === "admin" ? "Saaqib" : "Vikram Mehta";
+    const name = customName || (role === "admin" ? "Saaqib" : "Vikram Mehta");
+    
+    let businessId = activeBusiness?.id || "bus-1";
+
+    if (customCompanyName) {
+      // Create new business
+      const newBiz: Business = {
+        id: `bus-${Date.now()}`,
+        name: customCompanyName,
+        currency: "INR",
+        invoice_prefix: customCompanyName.split(" ").map(w => w[0]).join("").toUpperCase() + "-INV",
+        invoice_counter: 1,
+        created_at: new Date().toISOString(),
+        logo_url: "",
+        signature_url: ""
+      };
+      
+      // Update businesses list
+      const updatedBizs = [...businesses, newBiz];
+      setBusinesses(updatedBizs);
+      saveLocal("businesses", updatedBizs);
+      
+      // Set as active business
+      setActiveBusiness(newBiz);
+      localStorage.setItem("hadyra_active_business_id", newBiz.id);
+      
+      businessId = newBiz.id;
+      
+      // Log business creation
+      setTimeout(() => {
+        addLogLocal("BUSINESS_CREATE", `Created new business: ${customCompanyName}`);
+      }, 50);
+
+      if (supabaseClient) {
+        supabaseClient.from("businesses").insert([newBiz]).then();
+      }
+    }
+
     const loggedUser: Profile = {
       id: role === "admin" ? "user-1" : "user-2",
       email,
       full_name: name,
       role,
-      active_business_id: activeBusiness?.id || "bus-1"
+      active_business_id: businessId
     };
     setCurrentUser(loggedUser);
     localStorage.setItem("hadyra_user", JSON.stringify(loggedUser));

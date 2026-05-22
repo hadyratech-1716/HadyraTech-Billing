@@ -41,7 +41,11 @@ export default function Auth() {
   const handleOtpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Simulate validating the OTP
-    login(email, role);
+    if (isLogin) {
+      login(email, role);
+    } else {
+      login(email, role, name, companyName);
+    }
   };
 
   const handleOtpChange = (element: HTMLInputElement, index: number) => {
