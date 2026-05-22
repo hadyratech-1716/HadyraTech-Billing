@@ -276,46 +276,8 @@ export default function Billing({ onPrintInvoice, onShareInvoice }: {
     onPrintInvoice(created.id);
   };
 
-  // Initialize Speech recognition hook
-  useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const rec = new SpeechRecognition();
-      rec.continuous = false;
-      rec.interimResults = false;
-      rec.lang = "en-IN"; // Set to Indian English for easy numeric parsing
-
-      rec.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript.toLowerCase();
-        setVoiceTranscript(transcript);
-        parseVoiceCommand(transcript);
-        setIsListening(false);
-      };
-
-      rec.onerror = () => {
-        setIsListening(false);
-      };
-
-      rec.onend = () => {
-        setIsListening(false);
-      };
-
-      recognitionRef.current = rec;
-    }
-  }, [bizProducts]);
-
-  const toggleListening = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-    } else {
-      setVoiceTranscript("Listening for commands...");
-      setIsListening(true);
-      recognitionRef.current?.start();
-    }
-  };
-
   // Voice Command Heuristics Parser
-  const parseVoiceCommand = (cmd: string) => {
+  function parseVoiceCommand(cmd: string) {
     // 1. Clear Cart command
     if (cmd.includes("clear") || cmd.includes("empty cart")) {
       setCart([]);
@@ -378,6 +340,44 @@ export default function Billing({ onPrintInvoice, onShareInvoice }: {
       } else {
         setVoiceTranscript(`Command "${cmd}" not recognized.`);
       }
+    }
+  }
+
+  // Initialize Speech recognition hook
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const rec = new SpeechRecognition();
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = "en-IN"; // Set to Indian English for easy numeric parsing
+
+      rec.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript.toLowerCase();
+        setVoiceTranscript(transcript);
+        parseVoiceCommand(transcript);
+        setIsListening(false);
+      };
+
+      rec.onerror = () => {
+        setIsListening(false);
+      };
+
+      rec.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = rec;
+    }
+  }, [bizProducts]);
+
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+    } else {
+      setVoiceTranscript("Listening for commands...");
+      setIsListening(true);
+      recognitionRef.current?.start();
     }
   };
 

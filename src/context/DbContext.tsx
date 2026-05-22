@@ -1,7 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { initializeApp, getApps, getApp, deleteApp } from "firebase/app";
+import { getFirestore, doc, setDoc, deleteDoc, writeBatch, collection, getDocs } from "firebase/firestore";
 
 // Type Definitions
 export interface Profile {
@@ -40,6 +41,7 @@ export interface Product {
   stock_quantity: number;
   min_stock_alert: number;
   category: string;
+  billing_cycle?: "monthly" | "annual" | "one-time" | "hourly";
   created_at: string;
 }
 
@@ -110,6 +112,14 @@ export interface AuditLog {
   created_at: string;
 }
 
+export interface AuthorizedUser {
+  id: string;
+  email: string;
+  full_name: string;
+  role: "admin" | "employee";
+  created_at: string;
+}
+
 export interface DbContextType {
   currentUser: Profile | null;
   activeBusiness: Business | null;
@@ -119,12 +129,16 @@ export interface DbContextType {
   invoices: Invoice[];
   expenses: Expense[];
   logs: AuditLog[];
+  authorizedUsers: AuthorizedUser[];
   syncStatus: "idle" | "syncing" | "synced" | "error";
-  supabaseConfig: { url: string; anonKey: string } | null;
+  firebaseConfig: { apiKey: string; projectId: string; appId: string } | null;
   
   // Auth actions
   login: (email: string, role: "admin" | "employee", customName?: string, customCompanyName?: string) => boolean;
   logout: () => void;
+  addAuthorizedUser: (email: string, fullName: string, role: "admin" | "employee") => AuthorizedUser;
+  updateAuthorizedUser: (id: string, updates: Partial<AuthorizedUser>) => void;
+  deleteAuthorizedUser: (id: string) => void;
   
   // Business actions
   changeBusiness: (id: string) => void;
@@ -154,8 +168,8 @@ export interface DbContextType {
   clearLogs: () => void;
   
   // Sync & settings
-  saveSupabaseConfig: (url: string, anonKey: string) => Promise<boolean>;
-  disconnectSupabase: () => void;
+  saveFirebaseConfig: (apiKey: string, projectId: string, appId: string) => Promise<boolean>;
+  disconnectFirebase: () => void;
   syncToCloud: () => Promise<void>;
   exportBackup: () => void;
   importBackup: (jsonString: string) => boolean;
@@ -210,6 +224,7 @@ const MOCK_PRODUCTS: Product[] = [
     stock_quantity: 1250,
     min_stock_alert: 100,
     category: "Software Services",
+    billing_cycle: "hourly",
     created_at: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString()
   },
   {
@@ -225,6 +240,7 @@ const MOCK_PRODUCTS: Product[] = [
     stock_quantity: 8,
     min_stock_alert: 10,
     category: "Cloud Services",
+    billing_cycle: "one-time",
     created_at: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString()
   },
   {
@@ -240,6 +256,7 @@ const MOCK_PRODUCTS: Product[] = [
     stock_quantity: 340,
     min_stock_alert: 50,
     category: "Support Contracts",
+    billing_cycle: "annual",
     created_at: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString()
   },
   {
@@ -255,6 +272,7 @@ const MOCK_PRODUCTS: Product[] = [
     stock_quantity: 9999, // Infinite digital goods
     min_stock_alert: 2,
     category: "Software Licensing",
+    billing_cycle: "annual",
     created_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString()
   },
   // Business 2 products (Qatar Branch)
@@ -271,6 +289,7 @@ const MOCK_PRODUCTS: Product[] = [
     stock_quantity: 120,
     min_stock_alert: 15,
     category: "Software Licensing",
+    billing_cycle: "monthly",
     created_at: new Date().toISOString()
   },
   {
@@ -286,6 +305,7 @@ const MOCK_PRODUCTS: Product[] = [
     stock_quantity: 50,
     min_stock_alert: 10,
     category: "Managed IT Services",
+    billing_cycle: "monthly",
     created_at: new Date().toISOString()
   }
 ];
@@ -497,10 +517,28 @@ const MOCK_AUDIT_LOGS: AuditLog[] = [
   }
 ];
 
+const MOCK_AUTHORIZED_USERS: AuthorizedUser[] = [
+  {
+    id: "auth-1",
+    email: "admin@hadyratech.com",
+    full_name: "Saaqib",
+    role: "admin",
+    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: "auth-2",
+    email: "sales@hadyratech.com",
+    full_name: "Vikram Mehta",
+    role: "employee",
+    created_at: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString()
+  }
+];
+
 export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // State variables
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [activeBusiness, setActiveBusiness] = useState<Business | null>(null);
+  const [authorizedUsers, setAuthorizedUsers] = useState<AuthorizedUser[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -508,8 +546,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "synced" | "error">("idle");
-  const [supabaseConfig, setSupabaseConfig] = useState<{ url: string; anonKey: string } | null>(null);
-  const [supabaseClient, setSupabaseClient] = useState<SupabaseClient | null>(null);
+  const [firebaseConfig, setFirebaseConfig] = useState<{ apiKey: string; projectId: string; appId: string } | null>(null);
+  const [firebaseDb, setFirebaseDb] = useState<any>(null);
 
   // Load from LocalStorage or seed mock data
   useEffect(() => {
@@ -522,15 +560,50 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const storedInvoices = localStorage.getItem("hadyra_invoices");
     const storedExpenses = localStorage.getItem("hadyra_expenses");
     const storedLogs = localStorage.getItem("hadyra_logs");
-    const storedSupabase = localStorage.getItem("hadyra_supabase_config");
+    const storedFirebase = localStorage.getItem("hadyra_firebase_config");
+    const storedAuthorizedUsers = localStorage.getItem("hadyra_authorized_users");
 
-    if (storedSupabase) {
+    if (storedFirebase) {
       try {
-        const parsed = JSON.parse(storedSupabase);
-        setSupabaseConfig(parsed);
-        setSupabaseClient(createClient(parsed.url, parsed.anonKey));
+        const parsed = JSON.parse(storedFirebase);
+        setFirebaseConfig(parsed);
+        const config = {
+          apiKey: parsed.apiKey,
+          authDomain: `${parsed.projectId}.firebaseapp.com`,
+          projectId: parsed.projectId,
+          storageBucket: `${parsed.projectId}.appspot.com`,
+          messagingSenderId: "",
+          appId: parsed.appId
+        };
+        let app;
+        if (getApps().length === 0) {
+          app = initializeApp(config);
+        } else {
+          app = getApp();
+        }
+        const dbInstance = getFirestore(app);
+        setFirebaseDb(dbInstance);
+
+        // Fetch authorized users asynchronously from cloud
+        const fetchAuth = async () => {
+          try {
+            const colRef = collection(dbInstance, "authorized_users");
+            const snap = await getDocs(colRef);
+            const list: AuthorizedUser[] = [];
+            snap.forEach((docRef) => {
+              list.push(docRef.data() as AuthorizedUser);
+            });
+            if (list.length > 0) {
+              setAuthorizedUsers(list);
+              localStorage.setItem("hadyra_authorized_users", JSON.stringify(list));
+            }
+          } catch (e) {
+            console.error("Failed to fetch authorized users", e);
+          }
+        };
+        fetchAuth();
       } catch (e) {
-        console.error("Error loading Supabase config", e);
+        console.error("Error loading Firebase config", e);
       }
     }
 
@@ -578,9 +651,14 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     if (storedLogs) {
       try { setLogs(JSON.parse(storedLogs)); } catch (e) { setLogs(MOCK_AUDIT_LOGS); }
     }
+    if (storedAuthorizedUsers) {
+      try { setAuthorizedUsers(JSON.parse(storedAuthorizedUsers)); } catch (e) { setAuthorizedUsers(MOCK_AUTHORIZED_USERS); }
+    } else {
+      setAuthorizedUsers(MOCK_AUTHORIZED_USERS);
+    }
   }, []);
 
-  const seedMockData = () => {
+  function seedMockData() {
     setBusinesses(MOCK_BUSINESSES);
     setActiveBusiness(MOCK_BUSINESSES[0]);
     setProducts(MOCK_PRODUCTS);
@@ -588,6 +666,7 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     setInvoices(MOCK_INVOICES);
     setExpenses(MOCK_EXPENSES);
     setLogs(MOCK_AUDIT_LOGS);
+    setAuthorizedUsers(MOCK_AUTHORIZED_USERS);
 
     localStorage.setItem("hadyra_businesses", JSON.stringify(MOCK_BUSINESSES));
     localStorage.setItem("hadyra_active_business_id", MOCK_BUSINESSES[0].id);
@@ -596,11 +675,27 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     localStorage.setItem("hadyra_invoices", JSON.stringify(MOCK_INVOICES));
     localStorage.setItem("hadyra_expenses", JSON.stringify(MOCK_EXPENSES));
     localStorage.setItem("hadyra_logs", JSON.stringify(MOCK_AUDIT_LOGS));
-  };
+    localStorage.setItem("hadyra_authorized_users", JSON.stringify(MOCK_AUTHORIZED_USERS));
+  }
 
   // Syncer helper to write local states to browser cache
   const saveLocal = (key: string, data: any) => {
     localStorage.setItem(`hadyra_${key}`, JSON.stringify(data));
+  };
+
+  // Firestore helper write function
+  const writeToFirestore = async (collectionName: string, docId: string, data: any, deleteOp = false) => {
+    if (!firebaseDb) return;
+    try {
+      const docRef = doc(firebaseDb, collectionName, docId);
+      if (deleteOp) {
+        await deleteDoc(docRef);
+      } else {
+        await setDoc(docRef, data, { merge: true });
+      }
+    } catch (err) {
+      console.error(`Error writing to Firestore collection ${collectionName}:`, err);
+    }
   };
 
   // Logger helper
@@ -620,11 +715,9 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     setLogs(updated);
     saveLocal("logs", updated);
 
-    // If Supabase is active, async push log
-    if (supabaseClient) {
-      supabaseClient.from("audit_logs").insert([newLog]).then(({ error }) => {
-        if (error) console.error("Cloud audit log failed", error);
-      });
+    // If Firebase is active, async push log
+    if (firebaseDb) {
+      writeToFirestore("audit_logs", newLog.id, newLog);
     }
   };
 
@@ -635,13 +728,17 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     customName?: string,
     customCompanyName?: string
   ): boolean => {
-    // Basic verification simulation
-    const name = customName || (role === "admin" ? "Saaqib" : "Vikram Mehta");
-    
+    // Check if user is authorized in authorizedUsers list
+    const matchedUser = authorizedUsers.find(
+      (u) => u.email.trim().toLowerCase() === email.trim().toLowerCase()
+    );
+
+    let resolvedRole = role;
+    let resolvedName = customName || (role === "admin" ? "Saaqib" : "Vikram Mehta");
     let businessId = activeBusiness?.id || "bus-1";
 
     if (customCompanyName) {
-      // Create new business
+      // Create new business (Registration flow)
       const newBiz: Business = {
         id: `bus-${Date.now()}`,
         name: customCompanyName,
@@ -669,16 +766,40 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         addLogLocal("BUSINESS_CREATE", `Created new business: ${customCompanyName}`);
       }, 50);
 
-      if (supabaseClient) {
-        supabaseClient.from("businesses").insert([newBiz]).then();
+      if (firebaseDb) {
+        writeToFirestore("businesses", newBiz.id, newBiz);
       }
+
+      // Automatically authorize the registering user as admin
+      const newAuthUser: AuthorizedUser = {
+        id: `auth-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        email: email.trim().toLowerCase(),
+        full_name: resolvedName.trim(),
+        role: "admin",
+        created_at: new Date().toISOString()
+      };
+      const updatedAuthUsers = [...authorizedUsers, newAuthUser];
+      setAuthorizedUsers(updatedAuthUsers);
+      saveLocal("authorized_users", updatedAuthUsers);
+      if (firebaseDb) {
+        writeToFirestore("authorized_users", newAuthUser.id, newAuthUser);
+      }
+      
+      resolvedRole = "admin";
+    } else {
+      // Login flow: must exist in authorizedUsers
+      if (!matchedUser) {
+        return false;
+      }
+      resolvedRole = matchedUser.role;
+      resolvedName = matchedUser.full_name;
     }
 
     const loggedUser: Profile = {
-      id: role === "admin" ? "user-1" : "user-2",
+      id: matchedUser ? matchedUser.id : (resolvedRole === "admin" ? "user-1" : "user-2"),
       email,
-      full_name: name,
-      role,
+      full_name: resolvedName,
+      role: resolvedRole,
       active_business_id: businessId
     };
     setCurrentUser(loggedUser);
@@ -686,7 +807,7 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     
     // Add log
     setTimeout(() => {
-      addLogLocal("USER_LOGIN", `User ${name} logged in successfully with role: ${role}`);
+      addLogLocal("USER_LOGIN", `User ${resolvedName} logged in successfully with role: ${resolvedRole}`);
     }, 100);
     return true;
   };
@@ -695,6 +816,65 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     addLogLocal("USER_LOGOUT", `User logged out`);
     setCurrentUser(null);
     localStorage.removeItem("hadyra_user");
+  };
+
+  const addAuthorizedUser = (
+    email: string,
+    fullName: string,
+    role: "admin" | "employee"
+  ): AuthorizedUser => {
+    const newUser: AuthorizedUser = {
+      id: `auth-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      email: email.trim().toLowerCase(),
+      full_name: fullName.trim(),
+      role,
+      created_at: new Date().toISOString()
+    };
+    
+    const updated = [...authorizedUsers, newUser];
+    setAuthorizedUsers(updated);
+    saveLocal("authorized_users", updated);
+    
+    addLogLocal("AUTH_USER_ADD", `Granted access to ${fullName} (${email}) as ${role}`);
+    
+    if (firebaseDb) {
+      writeToFirestore("authorized_users", newUser.id, newUser);
+    }
+    
+    return newUser;
+  };
+
+  const updateAuthorizedUser = (id: string, updates: Partial<AuthorizedUser>) => {
+    const updated = authorizedUsers.map((user) => {
+      if (user.id === id) {
+        const updatedUser = { ...user, ...updates };
+        if (firebaseDb) {
+          writeToFirestore("authorized_users", id, updatedUser);
+        }
+        return updatedUser;
+      }
+      return user;
+    });
+    
+    setAuthorizedUsers(updated);
+    saveLocal("authorized_users", updated);
+    addLogLocal("AUTH_USER_UPDATE", `Updated permissions for user ID: ${id}`);
+  };
+
+  const deleteAuthorizedUser = (id: string) => {
+    const userToDelete = authorizedUsers.find(u => u.id === id);
+    const updated = authorizedUsers.filter((user) => user.id !== id);
+    
+    setAuthorizedUsers(updated);
+    saveLocal("authorized_users", updated);
+    
+    if (userToDelete) {
+      addLogLocal("AUTH_USER_REVOKE", `Revoked access for ${userToDelete.full_name} (${userToDelete.email})`);
+    }
+    
+    if (firebaseDb) {
+      writeToFirestore("authorized_users", id, null, true);
+    }
   };
 
   // Business Operations
@@ -747,8 +927,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       addLogLocal("BUSINESS_CREATE", `Created new business: ${name}`);
     }, 50);
 
-    if (supabaseClient) {
-      supabaseClient.from("businesses").insert([newBiz]).then();
+    if (firebaseDb) {
+      writeToFirestore("businesses", newBiz.id, newBiz);
     }
 
     return newBiz;
@@ -772,8 +952,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       addLogLocal("BUSINESS_UPDATE", `Updated configuration for business ID: ${id}`);
     }, 50);
 
-    if (supabaseClient) {
-      supabaseClient.from("businesses").update(updates).eq("id", id).then();
+    if (firebaseDb) {
+      writeToFirestore("businesses", id, updates);
     }
   };
 
@@ -792,8 +972,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     
     addLogLocal("PRODUCT_ADD", `Added item: ${newProd.name} (SKU: ${newProd.sku || "N/A"}, Stock: ${newProd.stock_quantity})`);
 
-    if (supabaseClient) {
-      supabaseClient.from("products").insert([newProd]).then();
+    if (firebaseDb) {
+      writeToFirestore("products", newProd.id, newProd);
     }
     return newProd;
   };
@@ -811,8 +991,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const match = products.find(p => p.id === id);
     addLogLocal("PRODUCT_UPDATE", `Updated item details for: ${match?.name || id}`);
 
-    if (supabaseClient) {
-      supabaseClient.from("products").update(updates).eq("id", id).then();
+    if (firebaseDb) {
+      writeToFirestore("products", id, updates);
     }
   };
 
@@ -824,8 +1004,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
     addLogLocal("PRODUCT_DELETE", `Removed item: ${match?.name || id}`);
 
-    if (supabaseClient) {
-      supabaseClient.from("products").delete().eq("id", id).then();
+    if (firebaseDb) {
+      writeToFirestore("products", id, null, true);
     }
   };
 
@@ -846,8 +1026,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
     addLogLocal("CUSTOMER_ADD", `Registered new client: ${newCust.name} (Phone: ${newCust.phone || "N/A"})`);
 
-    if (supabaseClient) {
-      supabaseClient.from("customers").insert([newCust]).then();
+    if (firebaseDb) {
+      writeToFirestore("customers", newCust.id, newCust);
     }
     return newCust;
   };
@@ -865,8 +1045,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const match = customers.find(c => c.id === id);
     addLogLocal("CUSTOMER_UPDATE", `Updated details for customer: ${match?.name || id}`);
 
-    if (supabaseClient) {
-      supabaseClient.from("customers").update(updates).eq("id", id).then();
+    if (firebaseDb) {
+      writeToFirestore("customers", id, updates);
     }
   };
 
@@ -880,10 +1060,10 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     setCustomers(updated);
     saveLocal("customers", updated);
 
-    if (supabaseClient) {
+    if (firebaseDb) {
       const match = customers.find(c => c.id === id);
       if (match) {
-        supabaseClient.from("customers").update({ balance: Math.max(0, match.balance + amount) }).eq("id", id).then();
+        writeToFirestore("customers", id, { balance: Math.max(0, match.balance + amount) });
       }
     }
   };
@@ -953,13 +1133,13 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       setCustomers(updatedCustomers);
       saveLocal("customers", updatedCustomers);
 
-      if (supabaseClient) {
+      if (firebaseDb) {
         const target = customers.find(c => c.id === invData.customer_id);
         if (target) {
-          supabaseClient.from("customers").update({
+          writeToFirestore("customers", target.id, {
             balance: target.balance + balanceOwed,
             loyalty_points: target.loyalty_points + Math.floor(invData.total_amount / 100)
-          }).eq("id", target.id).then();
+          });
         }
       }
     }
@@ -978,31 +1158,25 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
     addLogLocal("INVOICE_CREATE", `Created Invoice ${invNumber} for Total: ₹${newInvoice.total_amount.toFixed(2)} (${newInvoice.payment_status.toUpperCase()})`);
 
-    // Sync to Supabase if connected
-    if (supabaseClient) {
+    // Sync to Firebase if connected
+    if (firebaseDb) {
       // 1. Insert Invoice
-      const { items, ...sqlInvoice } = newInvoice;
-      supabaseClient.from("invoices").insert([sqlInvoice]).then(({ error }) => {
-        if (!error && items) {
-          // 2. Insert items
-          supabaseClient.from("invoice_items").insert(items).then();
-        }
-      });
-      // 3. Update stock levels on Supabase
+      writeToFirestore("invoices", newInvoice.id, newInvoice);
+      // 2. Update stock levels on Firebase
       itemsData.forEach((item) => {
         if (item.product_id) {
           const match = products.find(p => p.id === item.product_id);
           if (match) {
-            supabaseClient.from("products").update({
+            writeToFirestore("products", item.product_id, {
               stock_quantity: Math.max(0, match.stock_quantity - item.quantity)
-            }).eq("id", item.product_id).then();
+            });
           }
         }
       });
-      // 4. Update Business Counter on Supabase
-      supabaseClient.from("businesses").update({
+      // 3. Update Business Counter on Firebase
+      writeToFirestore("businesses", activeBusiness.id, {
         invoice_counter: activeBusiness.invoice_counter + 1
-      }).eq("id", activeBusiness.id).then();
+      });
     }
 
     return newInvoice;
@@ -1018,8 +1192,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
     addLogLocal("INVOICE_DELETE", `Cancelled/Deleted Invoice ${match.invoice_number}`);
 
-    if (supabaseClient) {
-      supabaseClient.from("invoices").delete().eq("id", id).then();
+    if (firebaseDb) {
+      writeToFirestore("invoices", id, null, true);
     }
   };
 
@@ -1038,8 +1212,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
     addLogLocal("EXPENSE_ADD", `Logged Expense: ₹${newExp.amount.toFixed(2)} under category "${newExp.category}"`);
 
-    if (supabaseClient) {
-      supabaseClient.from("expenses").insert([newExp]).then();
+    if (firebaseDb) {
+      writeToFirestore("expenses", newExp.id, newExp);
     }
     return newExp;
   };
@@ -1052,8 +1226,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
     addLogLocal("EXPENSE_DELETE", `Removed Expense of ₹${match?.amount || id}`);
 
-    if (supabaseClient) {
-      supabaseClient.from("expenses").delete().eq("id", id).then();
+    if (firebaseDb) {
+      writeToFirestore("expenses", id, null, true);
     }
   };
 
@@ -1067,95 +1241,154 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     saveLocal("logs", []);
   };
 
-  // Supabase Custom Config
-  const saveSupabaseConfig = async (url: string, anonKey: string): Promise<boolean> => {
+  // Firebase Custom Config
+  const saveFirebaseConfig = async (apiKey: string, projectId: string, appId: string): Promise<boolean> => {
     try {
       setSyncStatus("syncing");
-      const client = createClient(url, anonKey);
+      const config = {
+        apiKey,
+        authDomain: `${projectId}.firebaseapp.com`,
+        projectId,
+        storageBucket: `${projectId}.appspot.com`,
+        messagingSenderId: "",
+        appId
+      };
       
-      // Test the client connection by calling standard schema auth
-      const { error } = await client.from("businesses").select("id").limit(1);
+      let app;
+      if (getApps().length === 0) {
+        app = initializeApp(config);
+      } else {
+        try {
+          const existingApp = getApp();
+          await deleteApp(existingApp);
+        } catch (err) {}
+        app = initializeApp(config);
+      }
       
-      if (error && error.code !== "PGRST116") { // Ignore empty database table errors
-        console.warn("Connection verification warnings (tables might not exist):", error.message);
+      const db = getFirestore(app);
+      
+      // Test the Firestore connection by doing a getDocs from businesses collection
+      const testRef = collection(db, "businesses");
+      await getDocs(testRef);
+
+      // Sync authorized users from/to Firestore on connection
+      try {
+        const colRef = collection(db, "authorized_users");
+        const snap = await getDocs(colRef);
+        const list: AuthorizedUser[] = [];
+        snap.forEach((docRef) => {
+          list.push(docRef.data() as AuthorizedUser);
+        });
+        if (list.length > 0) {
+          setAuthorizedUsers(list);
+          localStorage.setItem("hadyra_authorized_users", JSON.stringify(list));
+        } else {
+          // Sync existing local authorized users to Firestore
+          const batch = writeBatch(db);
+          const currentList = localStorage.getItem("hadyra_authorized_users") 
+            ? JSON.parse(localStorage.getItem("hadyra_authorized_users")!) 
+            : MOCK_AUTHORIZED_USERS;
+          
+          for (const user of currentList) {
+            const uRef = doc(db, "authorized_users", user.id);
+            batch.set(uRef, user);
+          }
+          await batch.commit();
+        }
+      } catch (err) {
+        console.error("Failed to sync authorized users on connection:", err);
       }
 
-      setSupabaseConfig({ url, anonKey });
-      setSupabaseClient(client);
-      localStorage.setItem("hadyra_supabase_config", JSON.stringify({ url, anonKey }));
+      setFirebaseConfig({ apiKey, projectId, appId });
+      setFirebaseDb(db);
+      localStorage.setItem("hadyra_firebase_config", JSON.stringify({ apiKey, projectId, appId }));
       setSyncStatus("synced");
-      addLogLocal("CLOUD_CONNECT", `Connected to cloud database (Supabase): ${url}`);
+      addLogLocal("CLOUD_CONNECT", `Connected to cloud database (Firestore): ${projectId}`);
       return true;
     } catch (e: any) {
       setSyncStatus("error");
-      addLogLocal("CLOUD_CONNECT_FAIL", `Supabase registration failed: ${e.message}`);
+      addLogLocal("CLOUD_CONNECT_FAIL", `Firestore registration failed: ${e.message}`);
       return false;
     }
   };
 
-  const disconnectSupabase = () => {
-    setSupabaseConfig(null);
-    setSupabaseClient(null);
-    localStorage.removeItem("hadyra_supabase_config");
+  const disconnectFirebase = () => {
+    setFirebaseConfig(null);
+    setFirebaseDb(null);
+    localStorage.removeItem("hadyra_firebase_config");
     setSyncStatus("idle");
     addLogLocal("CLOUD_DISCONNECT", "Cloud database synchronization disconnected.");
   };
 
-  // Bulk Sync to Cloud
+  // Bulk Sync to Cloud (Firestore)
   const syncToCloud = async () => {
-    if (!supabaseClient) {
+    if (!firebaseDb) {
       setSyncStatus("error");
       return;
     }
 
     try {
       setSyncStatus("syncing");
+
+      // Helper to batch set items in Firestore using chunks of 400
+      const commitBatchInChunks = async (collectionName: string, itemsList: any[]) => {
+        let currentBatch = writeBatch(firebaseDb);
+        let count = 0;
+        
+        for (const item of itemsList) {
+          const docRef = doc(firebaseDb, collectionName, item.id);
+          currentBatch.set(docRef, item, { merge: true });
+          count++;
+          
+          if (count === 400) {
+            await currentBatch.commit();
+            currentBatch = writeBatch(firebaseDb);
+            count = 0;
+          }
+        }
+        
+        if (count > 0) {
+          await currentBatch.commit();
+        }
+      };
       
       // Upload businesses
       if (businesses.length > 0) {
-        await supabaseClient.from("businesses").upsert(businesses);
+        await commitBatchInChunks("businesses", businesses);
       }
 
       // Upload products
       if (products.length > 0) {
-        await supabaseClient.from("products").upsert(products);
+        await commitBatchInChunks("products", products);
       }
 
       // Upload customers
       if (customers.length > 0) {
-        await supabaseClient.from("customers").upsert(customers);
+        await commitBatchInChunks("customers", customers);
       }
 
-      // Upload invoices & their line items
+      // Upload invoices (with nested items)
       if (invoices.length > 0) {
-        const invoiceInsertables = invoices.map(({ items, ...inv }) => inv);
-        await supabaseClient.from("invoices").upsert(invoiceInsertables);
-        
-        // Flatten and extract items
-        const invoiceItemsFlattened: InvoiceItem[] = [];
-        invoices.forEach((inv) => {
-          if (inv.items && inv.items.length > 0) {
-            invoiceItemsFlattened.push(...inv.items);
-          }
-        });
-        
-        if (invoiceItemsFlattened.length > 0) {
-          await supabaseClient.from("invoice_items").upsert(invoiceItemsFlattened);
-        }
+        await commitBatchInChunks("invoices", invoices);
       }
 
       // Upload expenses
       if (expenses.length > 0) {
-        await supabaseClient.from("expenses").upsert(expenses);
+        await commitBatchInChunks("expenses", expenses);
       }
 
       // Upload logs
       if (logs.length > 0) {
-        await supabaseClient.from("audit_logs").upsert(logs);
+        await commitBatchInChunks("audit_logs", logs);
+      }
+
+      // Upload authorized users
+      if (authorizedUsers.length > 0) {
+        await commitBatchInChunks("authorized_users", authorizedUsers);
       }
 
       setSyncStatus("synced");
-      addLogLocal("CLOUD_SYNC", "Manual sync completed. All offline records pushed to cloud.");
+      addLogLocal("CLOUD_SYNC", "Manual sync completed. All offline records pushed to Firestore.");
     } catch (e: any) {
       setSyncStatus("error");
       addLogLocal("CLOUD_SYNC_FAIL", `Cloud database synchronization failed: ${e.message}`);
@@ -1239,10 +1472,14 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         invoices,
         expenses,
         logs,
+        authorizedUsers,
         syncStatus,
-        supabaseConfig,
+        firebaseConfig,
         login,
         logout,
+        addAuthorizedUser,
+        updateAuthorizedUser,
+        deleteAuthorizedUser,
         changeBusiness,
         addBusiness,
         updateBusiness,
@@ -1258,8 +1495,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         deleteExpense,
         addLog,
         clearLogs,
-        saveSupabaseConfig,
-        disconnectSupabase,
+        saveFirebaseConfig,
+        disconnectFirebase,
         syncToCloud,
         exportBackup,
         importBackup,

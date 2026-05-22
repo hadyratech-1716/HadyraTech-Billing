@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useDb } from "@/context/DbContext";
-import { Shield, Mail, Key, User, ArrowRight, Building, CheckCircle } from "lucide-react";
+import { Shield, Mail, Key, User, ArrowRight, Building, CheckCircle, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Auth() {
@@ -18,6 +18,7 @@ export default function Auth() {
   const [step, setStep] = useState<"credentials" | "otp">("credentials");
   const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
   const [timer, setTimer] = useState(59);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -40,11 +41,18 @@ export default function Auth() {
 
   const handleOtpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate validating the OTP
+    setLoginError(null);
+    let success = false;
     if (isLogin) {
-      login(email, role);
+      success = login(email, role);
     } else {
-      login(email, role, name, companyName);
+      success = login(email, role, name, companyName);
+    }
+    
+    if (!success) {
+      setLoginError("Access denied: Your email is not authorized to access Hadyra Billing. Please contact your system Administrator.");
+      setStep("credentials");
+      setOtpCode(["", "", "", "", "", ""]);
     }
   };
 
@@ -62,10 +70,14 @@ export default function Auth() {
   };
 
   const triggerQuickLogin = (selectedRole: "admin" | "employee") => {
+    setLoginError(null);
     const targetEmail = selectedRole === "admin" ? "admin@hadyratech.com" : "sales@hadyratech.com";
     setRole(selectedRole);
     setEmail(targetEmail);
-    login(targetEmail, selectedRole);
+    const success = login(targetEmail, selectedRole);
+    if (!success) {
+      setLoginError(`Quick login failed. User ${targetEmail} is not authorized.`);
+    }
   };
 
   return (
@@ -143,6 +155,17 @@ export default function Auth() {
                   </button>
                 </div>
 
+                {loginError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex gap-2 items-start mb-6"
+                  >
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <div>{loginError}</div>
+                  </motion.div>
+                )}
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {!isLogin && (
                     <>
@@ -190,7 +213,7 @@ export default function Auth() {
                         required
                         placeholder="name@company.com"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => { setEmail(e.target.value); setLoginError(null); }}
                         className="w-full pl-10 pr-4 py-3 text-sm rounded-xl glass-input"
                       />
                     </div>

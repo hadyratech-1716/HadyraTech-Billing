@@ -5,7 +5,7 @@ import { useDb } from "@/context/DbContext";
 import { 
   LayoutDashboard, ShoppingCart, FileText, Package, Users, 
   Receipt, BarChart3, Settings, LogOut, Menu, X, ChevronDown, 
-  User, Cloud, CloudLightning, RefreshCw, AlertCircle, Building2, Plus
+  User, Cloud, CloudLightning, RefreshCw, AlertCircle, Building2, Plus, Shield
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -17,7 +17,7 @@ interface LayoutProps {
 
 export default function Layout({ children, activeView, setActiveView }: LayoutProps) {
   const { 
-    currentUser, logout, activeBusiness, businesses, changeBusiness, addBusiness, syncStatus, syncToCloud, supabaseConfig 
+    currentUser, logout, activeBusiness, businesses, changeBusiness, addBusiness, syncStatus, syncToCloud, firebaseConfig 
   } = useDb();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [bizDropdownOpen, setBizDropdownOpen] = useState(false);
@@ -32,6 +32,7 @@ export default function Layout({ children, activeView, setActiveView }: LayoutPr
     { id: "customers", label: "Client Database", icon: Users, roles: ["admin", "employee"] },
     { id: "expenses", label: "Expenses Track", icon: Receipt, roles: ["admin"] },
     { id: "reports", label: "Reports & GST", icon: BarChart3, roles: ["admin"] },
+    { id: "admin-users", label: "User Access", icon: Shield, roles: ["admin"] },
     { id: "settings", label: "Control Panel", icon: Settings, roles: ["admin"] },
   ];
 
@@ -79,8 +80,8 @@ export default function Layout({ children, activeView, setActiveView }: LayoutPr
         <div className="flex items-center gap-3">
           <button 
             onClick={syncToCloud} 
-            disabled={!supabaseConfig}
-            className={`p-1.5 rounded-lg border border-slate-800 ${supabaseConfig ? "hover:bg-slate-950/60" : "opacity-40"}`}
+            disabled={!firebaseConfig}
+            className={`p-1.5 rounded-lg border border-slate-800 ${firebaseConfig ? "hover:bg-slate-950/60" : "opacity-40"}`}
             title="Sync Data"
           >
             {syncIcon()}
@@ -220,19 +221,19 @@ export default function Layout({ children, activeView, setActiveView }: LayoutPr
             {/* Database Sync shortcut button */}
             <button
               onClick={syncToCloud}
-              disabled={!supabaseConfig}
+              disabled={!firebaseConfig}
               className={`w-full p-2.5 rounded-xl border flex items-center justify-between transition-all ${
-                supabaseConfig 
+                firebaseConfig 
                   ? "bg-slate-950/80 border-slate-850 hover:bg-slate-950 hover:border-slate-800" 
                   : "bg-slate-950/20 border-slate-900 opacity-60 cursor-not-allowed"
               }`}
-              title={supabaseConfig ? "Sync to PostgreSQL Cloud DB" : "Connect database in Control Panel to sync"}
+              title={firebaseConfig ? "Sync to Firebase Firestore" : "Connect database in Control Panel to sync"}
             >
               <div className="flex items-center gap-2">
                 {syncIcon()}
                 <span className="text-[10px] font-bold text-slate-300 tracking-wide uppercase">{syncLabel()}</span>
               </div>
-              {supabaseConfig && <RefreshCw className="w-3.5 h-3.5 text-slate-500 hover:text-slate-300" />}
+              {firebaseConfig && <RefreshCw className="w-3.5 h-3.5 text-slate-500 hover:text-slate-300" />}
             </button>
 
             {/* Profile control */}

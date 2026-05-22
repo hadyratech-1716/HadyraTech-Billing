@@ -39,11 +39,9 @@ export default function ShareInvoiceModal({ invoiceId, onClose }: ShareInvoiceMo
     if (storedUpi) setUpiId(storedUpi);
   }, [customer]);
 
-  if (!invoice) return null;
-
   // WhatsApp Message Generator
   const waLink = useMemo(() => {
-    if (!activeBusiness) return "#";
+    if (!invoice || !activeBusiness) return "#";
     
     const clientName = customer ? customer.name : "Valued Customer";
     const dueAmt = invoice.total_amount - invoice.amount_paid;
@@ -76,7 +74,7 @@ export default function ShareInvoiceModal({ invoiceId, onClose }: ShareInvoiceMo
 
   // Email Template Generator
   const emailTemplates = useMemo(() => {
-    if (!activeBusiness) return { subject: "", body: "" };
+    if (!invoice || !activeBusiness) return { subject: "", body: "" };
 
     const clientName = customer ? customer.name : "Customer";
     const invoiceNum = invoice.invoice_number;
@@ -104,6 +102,8 @@ export default function ShareInvoiceModal({ invoiceId, onClose }: ShareInvoiceMo
   const emailMailto = useMemo(() => {
     return `mailto:${emailInput || "billing@hadyratech.com"}?subject=${encodeURIComponent(emailTemplates.subject)}&body=${encodeURIComponent(emailTemplates.body)}`;
   }, [emailInput, emailTemplates]);
+
+  if (!invoice) return null;
 
   const handleCopyWhatsApp = () => {
     if (!activeBusiness) return;

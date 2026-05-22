@@ -9,8 +9,8 @@ import {
 
 export default function Settings() {
   const { 
-    activeBusiness, updateBusiness, supabaseConfig, saveSupabaseConfig, 
-    disconnectSupabase, syncStatus, exportBackup, importBackup, resetToMock 
+    activeBusiness, updateBusiness, firebaseConfig, saveFirebaseConfig, 
+    disconnectFirebase, syncStatus, exportBackup, importBackup, resetToMock 
   } = useDb();
 
   // Profile forms
@@ -23,11 +23,12 @@ export default function Settings() {
   const [upiId, setUpiId] = useState("6048894526@KKBK0008488.ifsc.npci");
   const [bankDetails, setBankDetails] = useState("");
 
-  // Supabase forms
-  const [sbUrl, setSbUrl] = useState("");
-  const [sbKey, setSbKey] = useState("");
-  const [sbVerifying, setSbVerifying] = useState(false);
-  const [sbMessage, setSbMessage] = useState("");
+  // Firebase forms
+  const [fbApiKey, setFbApiKey] = useState("");
+  const [fbProjectId, setFbProjectId] = useState("");
+  const [fbAppId, setFbAppId] = useState("");
+  const [fbVerifying, setFbVerifying] = useState(false);
+  const [fbMessage, setFbMessage] = useState("");
 
   useEffect(() => {
     if (activeBusiness) {
@@ -39,9 +40,10 @@ export default function Settings() {
       setBizPrefix(activeBusiness.invoice_prefix || "INV");
     }
 
-    if (supabaseConfig) {
-      setSbUrl(supabaseConfig.url);
-      setSbKey(supabaseConfig.anonKey);
+    if (firebaseConfig) {
+      setFbApiKey(firebaseConfig.apiKey);
+      setFbProjectId(firebaseConfig.projectId);
+      setFbAppId(firebaseConfig.appId);
     }
 
     const storedUpi = localStorage.getItem("hadyra_merchant_upi");
@@ -52,7 +54,7 @@ export default function Settings() {
 1️⃣ A/c no.: 6048894526
 2️⃣ IFSC Code: KKBK0008488
 3️⃣ Home branch: ANNA NAGAR, CHENNAI`);
-  }, [activeBusiness, supabaseConfig]);
+  }, [activeBusiness, firebaseConfig]);
 
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,18 +77,18 @@ export default function Settings() {
 
   const handleCloudSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sbUrl || !sbKey) return;
+    if (!fbApiKey || !fbProjectId || !fbAppId) return;
 
-    setSbVerifying(true);
-    setSbMessage("Authenticating cloud endpoints...");
+    setFbVerifying(true);
+    setFbMessage("Authenticating Firestore endpoints...");
     
-    const success = await saveSupabaseConfig(sbUrl, sbKey);
-    setSbVerifying(false);
+    const success = await saveFirebaseConfig(fbApiKey, fbProjectId, fbAppId);
+    setFbVerifying(false);
     
     if (success) {
-      setSbMessage("Connected successfully! Database tables auto-synced.");
+      setFbMessage("Connected successfully! Firestore collections verified.");
     } else {
-      setSbMessage("Verification failed. Please review your credentials.");
+      setFbMessage("Verification failed. Please review your credentials.");
     }
   };
 
@@ -228,15 +230,13 @@ export default function Settings() {
 
         {/* Right Column: Database Cloud and Backups */}
         <div className="space-y-6">
-          
-          {/* Supabase connection */}
           <div className="glass-panel rounded-3xl p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-950 pb-3">
               <div className="flex items-center gap-2">
                 <Cloud className="w-4.5 h-4.5 text-[#0A6CFF]" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Supabase Cloud database</h3>
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Firebase Cloud Database</h3>
               </div>
-              {supabaseConfig ? (
+              {firebaseConfig ? (
                 <span className="text-[8px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-bold uppercase">
                   Connected
                 </span>
@@ -247,58 +247,71 @@ export default function Settings() {
               )}
             </div>
 
-            {supabaseConfig ? (
+            {firebaseConfig ? (
               <div className="space-y-3.5 text-xs text-brand-gray">
-                <p>Application is synchronized with cloud database PostgreSQL. Offline changes sync automatically in the background.</p>
+                <p>Application is synchronized with Cloud Firestore. Offline changes sync automatically in the background.</p>
                 <div className="p-3 bg-slate-950/60 border border-slate-900 rounded-xl space-y-1.5 font-mono text-[10px]">
-                  <p className="truncate">URL: <span className="text-slate-350">{supabaseConfig.url}</span></p>
-                  <p className="truncate">Key: <span className="text-slate-350">{supabaseConfig.anonKey.substring(0, 15)}...</span></p>
+                  <p className="truncate">Project ID: <span className="text-slate-350">{firebaseConfig.projectId}</span></p>
+                  <p className="truncate">API Key: <span className="text-slate-350">{firebaseConfig.apiKey.substring(0, 15)}...</span></p>
+                  <p className="truncate">App ID: <span className="text-slate-350">{firebaseConfig.appId.substring(0, 15)}...</span></p>
                 </div>
                 <button
-                  onClick={disconnectSupabase}
-                  className="w-full py-2 bg-rose-500/10 border border-rose-500/20 text-rose-450 hover:bg-rose-500/20 font-bold rounded-xl transition"
+                  onClick={disconnectFirebase}
+                  className="w-full py-2 bg-rose-500/10 border border-rose-500/20 text-rose-455 hover:bg-rose-500/20 font-bold rounded-xl transition"
                 >
                   Disconnect database Cloud
                 </button>
               </div>
             ) : (
               <form onSubmit={handleCloudSubmit} className="space-y-3.5 text-xs">
-                <p className="text-brand-gray leading-normal">Enter your Supabase URL & Anon Key to connect. Your local offline database will automatically synchronize.</p>
+                <p className="text-brand-gray leading-normal">Enter your Firebase Web App credentials to connect. Your local offline database will automatically synchronize.</p>
                 
                 <div className="space-y-1">
-                  <label className="text-slate-400 font-semibold flex items-center gap-1"><Link2 className="w-3.5 h-3.5" /> Project URL</label>
+                  <label className="text-slate-400 font-semibold flex items-center gap-1"><Link2 className="w-3.5 h-3.5" /> Project ID</label>
                   <input
                     type="text"
                     required
-                    placeholder="https://xxxx.supabase.co"
-                    value={sbUrl}
-                    onChange={(e) => setSbUrl(e.target.value)}
+                    placeholder="hadyratech-billing"
+                    value={fbProjectId}
+                    onChange={(e) => setFbProjectId(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl glass-input font-mono text-[10px]"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-slate-400 font-semibold flex items-center gap-1"><Key className="w-3.5 h-3.5" /> Anon Public API Key</label>
+                  <label className="text-slate-400 font-semibold flex items-center gap-1"><Key className="w-3.5 h-3.5" /> Web API Key</label>
                   <input
                     type="password"
                     required
-                    placeholder="eyJhbGciOi..."
-                    value={sbKey}
-                    onChange={(e) => setSbKey(e.target.value)}
+                    placeholder="AIzaSyA1..."
+                    value={fbApiKey}
+                    onChange={(e) => setFbApiKey(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl glass-input font-mono text-[10px]"
                   />
                 </div>
 
-                {sbMessage && (
-                  <p className="text-[10px] text-brand-blue font-mono">{sbMessage}</p>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold flex items-center gap-1"><Key className="w-3.5 h-3.5" /> App ID</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="1:1234567890:web:xxxx"
+                    value={fbAppId}
+                    onChange={(e) => setFbAppId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl glass-input font-mono text-[10px]"
+                  />
+                </div>
+
+                {fbMessage && (
+                  <p className="text-[10px] text-brand-blue font-mono">{fbMessage}</p>
                 )}
 
                 <button
                   type="submit"
-                  disabled={sbVerifying}
+                  disabled={fbVerifying}
                   className="w-full py-2.5 bg-brand-blue hover:bg-blue-650 text-white font-bold rounded-xl transition"
                 >
-                  {sbVerifying ? "Verifying connection..." : "Connect database Cloud"}
+                  {fbVerifying ? "Verifying connection..." : "Connect database Cloud"}
                 </button>
               </form>
             )}

@@ -14,6 +14,7 @@ import Reports from "@/components/Reports";
 import Settings from "@/components/Settings";
 import PrintInvoice from "@/components/PrintInvoice";
 import ShareInvoiceModal from "@/components/ShareInvoiceModal";
+import UsersAdmin from "@/components/UsersAdmin";
 
 function AppContent() {
   const { currentUser } = useDb();
@@ -54,6 +55,8 @@ function AppContent() {
         return <Expenses />;
       case "reports":
         return <Reports />;
+      case "admin-users":
+        return <UsersAdmin />;
       case "settings":
         return <Settings />;
       default:

@@ -3,8 +3,9 @@
 import React, { useState, useMemo } from "react";
 import { useDb } from "@/context/DbContext";
 import { 
-  TrendingUp, TrendingDown, Package, AlertTriangle, IndianRupee, 
-  Receipt, ArrowUpRight, CheckCircle2, MessageSquare, Send, Sparkles, Terminal
+  TrendingUp, TrendingDown, AlertTriangle, ArrowUpRight, 
+  CheckCircle2, Send, Sparkles, Terminal, Cloud, ShieldAlert, 
+  Briefcase, Activity, Landmark
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -15,8 +16,27 @@ export default function Dashboard() {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatHistory, setChatHistory] = useState<Array<{ sender: "user" | "ai"; text: string }>>([
-    { sender: "ai", text: "Hello! I am Hadyra AI. Ask me anything about your products, sales trends, or outstanding invoices." }
+    { sender: "ai", text: "Hello! I am Hadyra AI. Ask me anything about your Monthly Recurring Revenue (MRR), cloud overhead, SLA compliance, or total contract values." }
   ]);
+
+  // Currency helper
+  const currencySymbol = useMemo(() => {
+    return activeBusiness?.currency === "QAR" ? "QR" : "₹";
+  }, [activeBusiness]);
+
+  const formatCurrency = (amount: number) => {
+    if (activeBusiness?.currency === "QAR") {
+      return `QR ${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    return `₹${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const formatCurrencyCompact = (amount: number) => {
+    if (activeBusiness?.currency === "QAR") {
+      return `QR ${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+    }
+    return `₹${amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  };
 
   // Filter lists based on the active business
   const businessInvoices = useMemo(() => {
@@ -35,44 +55,63 @@ export default function Dashboard() {
     return logs.filter(log => log.business_id === activeBusiness?.id).slice(0, 5);
   }, [logs, activeBusiness]);
 
-  // Calculations
+  // SaaS Calculations
   const stats = useMemo(() => {
-    let revenue = 0;
-    let purchaseCostOfSoldItems = 0;
-    let unpaidDues = 0;
+    let totalContractValue = 0; // Total of all invoice amounts
     let paidRevenue = 0;
+    let unpaidDues = 0;
+    let mrr = 0;
 
     businessInvoices.forEach(inv => {
-      revenue += inv.total_amount;
+      totalContractValue += inv.total_amount;
       paidRevenue += inv.amount_paid;
       unpaidDues += (inv.total_amount - inv.amount_paid);
 
-      // Try to estimate COGS
+      // Calculate MRR contribution from invoice items
       if (inv.items) {
         inv.items.forEach(item => {
           const match = businessProducts.find(p => p.id === item.product_id);
-          if (match) {
-            purchaseCostOfSoldItems += (match.purchase_price * item.quantity);
+          const cycle = match?.billing_cycle || "one-time";
+          
+          if (cycle === "monthly") {
+            mrr += item.price * item.quantity;
+          } else if (cycle === "annual") {
+            mrr += (item.price * item.quantity) / 12;
           }
         });
       }
     });
 
+    // Cloud overhead calculations: filter expenses matching hosting, IT, cloud, servers, vercel, AWS, GCP
+    const cloudKeywords = ["cloud", "hosting", "aws", "gcp", "server", "domain", "internet", "it", "software", "license", "vercel", "saas"];
+    const cloudExpensesTotal = businessExpenses
+      .filter(exp => {
+        const cat = exp.category.toLowerCase();
+        const desc = (exp.description || "").toLowerCase();
+        return cloudKeywords.some(keyword => cat.includes(keyword) || desc.includes(keyword));
+      })
+      .reduce((acc, curr) => acc + curr.amount, 0);
+
     const totalExpenses = businessExpenses.reduce((acc, curr) => acc + curr.amount, 0);
-    const estimatedProfit = revenue - purchaseCostOfSoldItems - totalExpenses;
+    const netProfit = totalContractValue - totalExpenses;
     
-    const stockValuation = businessProducts.reduce((acc, curr) => acc + (curr.sales_price * curr.stock_quantity), 0);
-    
-    const lowStockItems = businessProducts.filter(p => p.stock_quantity <= p.min_stock_alert);
+    // Average Contract Value (ACV)
+    const acv = businessInvoices.length > 0 ? totalContractValue / businessInvoices.length : 0;
+
+    // SLA risk count (Services Registry - low stock quantity maps to low SLA / resource slots threshold)
+    const lowSlaServices = businessProducts.filter(p => p.stock_quantity <= p.min_stock_alert);
 
     return {
-      revenue,
-      estimatedProfit,
-      stockValuation,
+      mrr,
+      totalContractValue,
+      paidRevenue,
+      unpaidDues,
+      cloudExpensesTotal,
       totalExpenses,
-      lowStockCount: lowStockItems.length,
-      lowStockItems,
-      unpaidDues
+      netProfit,
+      acv,
+      lowSlaCount: lowSlaServices.length,
+      lowSlaServices
     };
   }, [businessInvoices, businessProducts, businessExpenses]);
 
@@ -114,7 +153,7 @@ export default function Dashboard() {
     return { points, pathString, areaString, maxVal };
   }, [businessInvoices]);
 
-  // Heuristic-based AI query parser
+  // Heuristic-based AI query parser updated for SaaS
   const handleChatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
@@ -123,61 +162,54 @@ export default function Dashboard() {
     setChatHistory(prev => [...prev, { sender: "user", text: userText }]);
     setChatInput("");
 
-    // Simulate thinking delay
     setTimeout(() => {
       let aiResponse = "";
       const textLower = userText.toLowerCase();
 
-      if (textLower.includes("best selling") || textLower.includes("popular") || textLower.includes("top item")) {
-        const productSales: { [key: string]: { name: string; qty: number } } = {};
-        businessInvoices.forEach(inv => {
-          if (inv.items) {
-            inv.items.forEach(item => {
-              if (item.product_id) {
-                if (!productSales[item.product_id]) {
-                  productSales[item.product_id] = { name: item.name, qty: 0 };
-                }
-                productSales[item.product_id].qty += item.quantity;
-              }
-            });
-          }
-        });
-        const sorted = Object.values(productSales).sort((a, b) => b.qty - a.qty);
-        if (sorted.length > 0) {
-          aiResponse = `Your best-selling product is "${sorted[0].name}" with a total of ${sorted[0].qty} units sold.`;
-        } else {
-          aiResponse = "There are no recorded product sales to evaluate best-selling data yet.";
-        }
+      if (textLower.includes("mrr") || textLower.includes("recurring") || textLower.includes("monthly revenue")) {
+        aiResponse = `Your Monthly Recurring Revenue (MRR) is ${formatCurrency(stats.mrr)}. This is calculated as the sum of monthly service subscriptions plus the monthly-equivalent value (Total/12) of active annual licenses.`;
       } 
-      else if (textLower.includes("profit") || textLower.includes("margin") || textLower.includes("loss")) {
-        aiResponse = `Your current estimated net profit for "${activeBusiness?.name}" is ₹${stats.estimatedProfit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}. This accounts for ₹${stats.revenue.toLocaleString("en-IN")} in gross sales minus ₹${stats.totalExpenses.toLocaleString("en-IN")} in tracked expenses and inventory overhead costs.`;
+      else if (textLower.includes("cloud") || textLower.includes("hosting") || textLower.includes("overhead") || textLower.includes("infra")) {
+        aiResponse = `Hadyra's cloud infrastructure & server overhead is currently ${formatCurrency(stats.cloudExpensesTotal)}. This tracks expenses tagged under cloud services, hosting, broadband, and software subscriptions.`;
+      } 
+      else if (textLower.includes("contract") || textLower.includes("ltv") || textLower.includes("valuation") || textLower.includes("tcv")) {
+        aiResponse = `The Total Contract Value (TCV) across all software agreements is ${formatCurrency(stats.totalContractValue)}. Your Average Contract Value (ACV) stands at ${formatCurrency(stats.acv)} across ${businessInvoices.length} invoices/agreements.`;
+      } 
+      else if (textLower.includes("sla") || textLower.includes("risk") || textLower.includes("capacity") || textLower.includes("consultant")) {
+        if (stats.lowSlaCount > 0) {
+          aiResponse = `You have ${stats.lowSlaCount} service(s) at SLA risk or with low capacity: ` + 
+            stats.lowSlaServices.map(i => `${i.name} (${i.stock_quantity} slots/hours remaining, alert threshold: ${i.min_stock_alert})`).join(", ") + ". Consider allocating more resource capacity or consultants to these lines.";
+        } else {
+          aiResponse = "Excellent! All service capacities are healthy. Consultant allocations and support SLAs are currently operating within safe thresholds.";
+        }
       } 
       else if (textLower.includes("dues") || textLower.includes("unpaid") || textLower.includes("outstanding")) {
         const debtors = businessInvoices.filter(inv => inv.payment_status !== "paid");
         if (debtors.length > 0) {
-          aiResponse = `You have ₹${stats.unpaidDues.toLocaleString("en-IN", { minimumFractionDigits: 2 })} in outstanding customer dues across ${debtors.length} invoice(s). Key unpaid invoices include: ` + 
-            debtors.map(d => `${d.invoice_number} (₹${(d.total_amount - d.amount_paid).toFixed(2)})`).join(", ") + ".";
+          aiResponse = `You have ${formatCurrency(stats.unpaidDues)} in outstanding invoice dues across ${debtors.length} contract(s). Outstanding invoices: ` + 
+            debtors.map(d => `${d.invoice_number} (${formatCurrency(d.total_amount - d.amount_paid)} remaining)`).join(", ") + ".";
         } else {
-          aiResponse = "Splendid! All customer invoices are fully settled. You have ₹0.00 in outstanding dues.";
+          aiResponse = "Outstanding! All billing contracts are fully settled. You have zero outstanding accounts receivable.";
         }
       } 
-      else if (textLower.includes("out of stock") || textLower.includes("low stock") || textLower.includes("alert")) {
-        if (stats.lowStockCount > 0) {
-          aiResponse = `You have ${stats.lowStockCount} items running low or out of stock: ` + 
-            stats.lowStockItems.map(i => `${i.name} (Qty: ${i.stock_quantity}/${i.min_stock_alert})`).join(", ") + ". We recommend restocking these immediately.";
-        } else {
-          aiResponse = "All inventory items are healthy and exceed minimum alert levels.";
-        }
-      } 
-      else if (textLower.includes("tax") || textLower.includes("gst")) {
-        const totalTax = businessInvoices.reduce((acc, curr) => acc + curr.tax_amount, 0);
-        aiResponse = `For "${activeBusiness?.name}", you have logged ₹${totalTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })} in total GST tax collections. This should be cross-audited inside the Reports tab for GSTR filing.`;
-      } 
+      else if (textLower.includes("profit") || textLower.includes("net") || textLower.includes("margin")) {
+        aiResponse = `Your estimated Net Profit is ${formatCurrency(stats.netProfit)}. This represents TCV (${formatCurrency(stats.totalContractValue)}) minus total business expenses (${formatCurrency(stats.totalExpenses)}).`;
+      }
       else if (textLower.includes("summary") || textLower.includes("status") || textLower.includes("how are we doing")) {
-        aiResponse = `Here is your current dashboard digest:\n• Revenue: ₹${stats.revenue.toLocaleString("en-IN")}\n• Net Profit: ₹${stats.estimatedProfit.toLocaleString("en-IN")}\n• Expenses: ₹${stats.totalExpenses.toLocaleString("en-IN")}\n• Stock Valuation: ₹${stats.stockValuation.toLocaleString("en-IN")}\n• Cloud Status: Cloud synchronization is fully operational.`;
+        aiResponse = `Here is your SaaS performance summary for "${activeBusiness?.name}":\n` +
+          `• MRR: ${formatCurrency(stats.mrr)}\n` +
+          `• Total Contract Valuation (TCV): ${formatCurrency(stats.totalContractValue)}\n` +
+          `• Cloud/Hosting Overhead: ${formatCurrency(stats.cloudExpensesTotal)}\n` +
+          `• SLA Risk Status: ${stats.lowSlaCount > 0 ? `${stats.lowSlaCount} alerts active` : "Healthy"}\n` +
+          `• Net Profit: ${formatCurrency(stats.netProfit)}`;
       } 
       else {
-        aiResponse = "I can help you review performance metrics. Try asking me:\n• 'What is my best selling product?'\n• 'List low stock items'\n• 'How much profit have we made?'\n• 'Who owes us unpaid dues?'\n• 'Show me a financial summary'";
+        aiResponse = "I can analyze your software business metrics. Try asking me:\n" +
+          "• 'What is our MRR?'\n" +
+          "• 'Show cloud hosting overhead'\n" +
+          "• 'What is our total contract value (TCV)?'\n" +
+          "• 'Are there any SLA capacity risks?'\n" +
+          "• 'Summarize our financial status'";
       }
 
       setChatHistory(prev => [...prev, { sender: "ai", text: aiResponse }]);
@@ -191,10 +223,10 @@ export default function Dashboard() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white font-display">
-            Business Dashboard
+            SaaS & Service Dashboard
           </h1>
           <p className="text-xs md:text-sm text-brand-gray">
-            Real-time analytics and management for <strong className="text-slate-300">{activeBusiness?.name}</strong>.
+            Real-time subscription metrics and service analytics for <strong className="text-slate-300">{activeBusiness?.name}</strong>.
           </p>
         </div>
         <button
@@ -209,7 +241,7 @@ export default function Dashboard() {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
-        {/* Gross Revenue */}
+        {/* MRR Card */}
         <motion.div 
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -219,17 +251,17 @@ export default function Dashboard() {
           <div className="absolute top-4 right-4 p-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl">
             <TrendingUp className="w-4.5 h-4.5" />
           </div>
-          <span className="text-[10px] text-brand-gray font-bold tracking-wider uppercase">Gross Revenue</span>
+          <span className="text-[10px] text-brand-gray font-bold tracking-wider uppercase">Monthly Recurring Revenue</span>
           <div className="flex items-baseline gap-1 mt-2">
-            <span className="text-2xl font-bold font-display text-white">₹{stats.revenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+            <span className="text-2xl font-bold font-display text-white">{formatCurrencyCompact(stats.mrr)}</span>
           </div>
           <p className="text-[10px] text-emerald-400 flex items-center gap-1 mt-2">
             <ArrowUpRight className="w-3.5 h-3.5" />
-            <span>Across {businessInvoices.length} invoices issued</span>
+            <span>Active monthly & annual licenses</span>
           </p>
         </motion.div>
 
-        {/* Estimated profit */}
+        {/* Contract Valuation / TCV */}
         <motion.div 
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -237,20 +269,20 @@ export default function Dashboard() {
           className="glass-panel rounded-2xl p-5 relative overflow-hidden"
         >
           <div className="absolute top-4 right-4 p-2 bg-brand-blue/10 border border-brand-blue/20 text-brand-blue rounded-xl">
-            <IndianRupee className="w-4.5 h-4.5" />
+            <Briefcase className="w-4.5 h-4.5" />
           </div>
-          <span className="text-[10px] text-brand-gray font-bold tracking-wider uppercase">Estimated Net Profit</span>
+          <span className="text-[10px] text-brand-gray font-bold tracking-wider uppercase">Total Contract Value (TCV)</span>
           <div className="flex items-baseline gap-1 mt-2">
-            <span className={`text-2xl font-bold font-display ${stats.estimatedProfit >= 0 ? "text-white" : "text-rose-400"}`}>
-              ₹{stats.estimatedProfit.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+            <span className="text-2xl font-bold font-display text-white">
+              {formatCurrencyCompact(stats.totalContractValue)}
             </span>
           </div>
-          <p className={`text-[10px] flex items-center gap-1 mt-2 ${stats.estimatedProfit >= 0 ? "text-brand-blue" : "text-rose-400"}`}>
-            <span>Adjusted for purchases & expenses</span>
+          <p className="text-[10px] text-brand-blue flex items-center gap-1 mt-2">
+            <span>Avg contract: {formatCurrencyCompact(stats.acv)}</span>
           </p>
         </motion.div>
 
-        {/* Expenses */}
+        {/* Cloud Infrastructure Overhead */}
         <motion.div 
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -258,19 +290,19 @@ export default function Dashboard() {
           className="glass-panel rounded-2xl p-5 relative overflow-hidden"
         >
           <div className="absolute top-4 right-4 p-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl">
-            <Receipt className="w-4.5 h-4.5" />
+            <Cloud className="w-4.5 h-4.5" />
           </div>
-          <span className="text-[10px] text-brand-gray font-bold tracking-wider uppercase">Tracked Expenses</span>
+          <span className="text-[10px] text-brand-gray font-bold tracking-wider uppercase">Cloud & Server Overhead</span>
           <div className="flex items-baseline gap-1 mt-2">
-            <span className="text-2xl font-bold font-display text-white">₹{stats.totalExpenses.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+            <span className="text-2xl font-bold font-display text-white">{formatCurrencyCompact(stats.cloudExpensesTotal)}</span>
           </div>
           <p className="text-[10px] text-rose-400 flex items-center gap-1 mt-2">
             <TrendingDown className="w-3.5 h-3.5" />
-            <span>Includes rentals & infrastructure</span>
+            <span>Hosting, SaaS sub & broadband</span>
           </p>
         </motion.div>
 
-        {/* Stock Valuation / Low stock alerts */}
+        {/* SLA Compliance / Active Agreements */}
         <motion.div 
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -278,32 +310,34 @@ export default function Dashboard() {
           className="glass-panel rounded-2xl p-5 relative overflow-hidden"
         >
           <div className="absolute top-4 right-4 p-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl">
-            <Package className="w-4.5 h-4.5" />
+            <ShieldAlert className="w-4.5 h-4.5" />
           </div>
-          <span className="text-[10px] text-brand-gray font-bold tracking-wider uppercase">Inventory Valuation</span>
+          <span className="text-[10px] text-brand-gray font-bold tracking-wider uppercase">Resource SLA Compliance</span>
           <div className="flex items-baseline gap-1 mt-2">
-            <span className="text-2xl font-bold font-display text-white">₹{stats.stockValuation.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+            <span className="text-2xl font-bold font-display text-white">
+              {stats.lowSlaCount > 0 ? `${stats.lowSlaCount} Alert` : "Healthy"}
+            </span>
           </div>
-          <p className={`text-[10px] flex items-center gap-1 mt-2 ${stats.lowStockCount > 0 ? "text-amber-400" : "text-brand-gray"}`}>
+          <p className={`text-[10px] flex items-center gap-1 mt-2 ${stats.lowSlaCount > 0 ? "text-amber-400" : "text-brand-gray"}`}>
             <AlertTriangle className="w-3.5 h-3.5" />
-            <span>{stats.lowStockCount} items below threshold limits</span>
+            <span>{stats.lowSlaCount} services below capacity thresholds</span>
           </p>
         </motion.div>
 
       </div>
 
-      {/* Graphs and Stock Alerts row */}
+      {/* Graphs and Alerts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* SVG Revenue Graph Panel */}
         <div className="lg:col-span-2 glass-panel rounded-3xl p-6 flex flex-col justify-between">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <h3 className="text-sm font-bold text-white font-display">Sales Revenue Trend</h3>
+              <h3 className="text-sm font-bold text-white font-display">Service Revenue Trend</h3>
               <p className="text-[10px] text-brand-gray">Gross sales performance over the past 7 days</p>
             </div>
             <div className="text-right">
-              <span className="text-xs font-bold text-emerald-400 block">+₹{(chartPoints.points.reduce((acc, curr) => acc + curr.value, 0) / 7).toFixed(0)} / day</span>
+              <span className="text-xs font-bold text-emerald-400 block">+{formatCurrencyCompact(chartPoints.points.reduce((acc, curr) => acc + curr.value, 0) / 7)} / day</span>
               <span className="text-[9px] text-brand-gray">Average Daily Run-rate</span>
             </div>
           </div>
@@ -329,7 +363,7 @@ export default function Dashboard() {
                 <g key={idx}>
                   <circle cx={p.x} cy={p.y} r="4.5" fill="#030712" stroke="#0A6CFF" strokeWidth="2" className="cursor-pointer" />
                   <text x={p.x} y={p.y - 12} fontSize="8" fill="#ffffff" fontWeight="semibold" textAnchor="middle" opacity="0.8">
-                    {p.value > 0 ? `₹${p.value}` : ""}
+                    {p.value > 0 ? formatCurrencyCompact(p.value) : ""}
                   </text>
                   <text x={p.x} y="148" fontSize="8" fill="#9EA7B3" textAnchor="middle">
                     {p.day}
@@ -350,32 +384,32 @@ export default function Dashboard() {
               {/* Due Balance Alert */}
               <div className="flex items-center gap-3 p-3 rounded-xl bg-rose-500/5 border border-rose-500/10">
                 <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-400">
-                  <AlertTriangle className="w-4 h-4" />
+                  <Landmark className="w-4 h-4" />
                 </div>
                 <div className="flex-1">
-                  <span className="text-[9px] text-brand-gray block uppercase font-bold">Unsettled Invoices</span>
-                  <span className="text-xs font-semibold text-slate-200 block">₹{stats.unpaidDues.toLocaleString("en-IN")} pending</span>
+                  <span className="text-[9px] text-brand-gray block uppercase font-bold">Unsettled Accounts</span>
+                  <span className="text-xs font-semibold text-slate-200 block">{formatCurrency(stats.unpaidDues)} pending</span>
                 </div>
               </div>
 
-              {/* Stock Warning Alert */}
+              {/* SLA Warning Alert */}
               <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10">
                 <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
-                  <Package className="w-4 h-4" />
+                  <ShieldAlert className="w-4 h-4" />
                 </div>
                 <div className="flex-1">
-                  <span className="text-[9px] text-brand-gray block uppercase font-bold">Low Stocks</span>
-                  <span className="text-xs font-semibold text-slate-200 block">{stats.lowStockCount} items running thin</span>
+                  <span className="text-[9px] text-brand-gray block uppercase font-bold">SLA/Capacity Alerts</span>
+                  <span className="text-xs font-semibold text-slate-200 block">{stats.lowSlaCount} service lines under capacity</span>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="border-t border-slate-900/60 pt-4 mt-4">
-            <span className="text-[9px] text-brand-gray font-bold block mb-2 uppercase">LOW STOCK QUICK VIEW</span>
+            <span className="text-[9px] text-brand-gray font-bold block mb-2 uppercase">SLA & CAPACITY WARNINGS</span>
             <div className="space-y-1.5 max-h-[85px] overflow-y-auto pr-1">
-              {stats.lowStockItems.length > 0 ? (
-                stats.lowStockItems.map(p => (
+              {stats.lowSlaServices.length > 0 ? (
+                stats.lowSlaServices.map(p => (
                   <div key={p.id} className="flex justify-between items-center text-[11px]">
                     <span className="text-slate-300 truncate max-w-[120px]">{p.name}</span>
                     <span className="font-bold text-amber-400">{p.stock_quantity} left</span>
@@ -384,7 +418,7 @@ export default function Dashboard() {
               ) : (
                 <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 py-1">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>All product inventories healthy!</span>
+                  <span>All service lines & SLAs healthy!</span>
                 </div>
               )}
             </div>
@@ -478,7 +512,7 @@ export default function Dashboard() {
               <form onSubmit={handleChatSubmit} className="p-4 border-t border-slate-900 bg-slate-950/40 flex gap-2">
                 <input
                   type="text"
-                  placeholder="Ask about sales, profit, dues..."
+                  placeholder="Ask about MRR, cloud overhead, SLA compliance, TCV..."
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   className="flex-1 px-3 py-2 text-xs rounded-xl glass-input"
@@ -494,7 +528,7 @@ export default function Dashboard() {
           </>
         )}
       </AnimatePresence>
-
     </div>
   );
 }
+
