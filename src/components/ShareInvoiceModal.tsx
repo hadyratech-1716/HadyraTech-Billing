@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { useDb } from "@/context/DbContext";
-import { Send, Phone, Mail, Check, X, FileText, Share, AlertTriangle } from "lucide-react";
+import { Send, Phone, Mail, Check, X, FileText, Share, AlertTriangle, Copy } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface ShareInvoiceModalProps {
@@ -11,10 +11,13 @@ interface ShareInvoiceModalProps {
 }
 
 export default function ShareInvoiceModal({ invoiceId, onClose }: ShareInvoiceModalProps) {
-  const { invoices, customers, activeBusiness } = useDb();
+  const { invoices, customers, activeBusiness, currentUser } = useDb();
   const [phoneInput, setPhoneInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [emailTemplate, setEmailTemplate] = useState<"standard" | "reminder" | "delivery">("standard");
+  const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
+  const [upiId, setUpiId] = useState("6048894526@KKBK0008488.ifsc.npci");
 
   // Find invoice details
   const invoice = useMemo(() => {
@@ -26,12 +29,14 @@ export default function ShareInvoiceModal({ invoiceId, onClose }: ShareInvoiceMo
     return customers.find((c) => c.id === invoice.customer_id);
   }, [customers, invoice]);
 
-  // Set default values from client profile
+  // Set default values from client profile and fetch custom UPI
   React.useEffect(() => {
     if (customer) {
       setPhoneInput(customer.phone || "");
       setEmailInput(customer.email || "");
     }
+    const storedUpi = localStorage.getItem("hadyra_merchant_upi");
+    if (storedUpi) setUpiId(storedUpi);
   }, [customer]);
 
   if (!invoice) return null;
@@ -41,13 +46,12 @@ export default function ShareInvoiceModal({ invoiceId, onClose }: ShareInvoiceMo
     if (!activeBusiness) return "#";
     
     const clientName = customer ? customer.name : "Valued Customer";
-    const statusText = invoice.payment_status === "paid" ? "fully settled" : "currently unpaid/pending";
     const dueAmt = invoice.total_amount - invoice.amount_paid;
     
     let text = `Dear ${clientName},\n\nHope you are doing well. Please find summary of tax invoice *${invoice.invoice_number}* issued by *${activeBusiness.name}*:\n\n• Invoice Date: ${new Date(invoice.invoice_date).toLocaleDateString()}\n• Total Amount: ₹${invoice.total_amount.toFixed(2)}\n• Amount Paid: ₹${invoice.amount_paid.toFixed(2)}\n• Status: *${invoice.payment_status.toUpperCase()}*\n`;
 
     if (dueAmt > 0) {
-      text += `• Due Balance: ₹${dueAmt.toFixed(2)}\n• UPI QR Code: upi://pay?pa=demo@upi&pn=${encodeURIComponent(activeBusiness.name)}&am=${invoice.total_amount.toFixed(2)}&cu=INR&tn=${invoice.invoice_number}\n`;
+      text += `• Due Balance: ₹${dueAmt.toFixed(2)}\n• UPI QR Code: upi://pay?pa=${upiId}&pn=${encodeURIComponent(activeBusiness.name)}&am=${invoice.total_amount.toFixed(2)}&cu=INR&tn=${invoice.invoice_number}\n`;
     }
 
     text += `\nThank you for choosing Hadyra Services!`;
@@ -55,8 +59,20 @@ export default function ShareInvoiceModal({ invoiceId, onClose }: ShareInvoiceMo
     // Clean phone number (remove spaces, plus sign)
     const cleanedPhone = phoneInput.replace(/[^0-9]/g, "");
     
-    return `https://wa.me/${cleanedPhone || "919876543210"}?text=${encodeURIComponent(text)}`;
-  }, [invoice, customer, activeBusiness, phoneInput]);
+    let phoneWithCountry = cleanedPhone;
+    if (cleanedPhone) {
+      const activeAddress = activeBusiness?.address?.toLowerCase() || "";
+      const isQatar = activeAddress.includes("qatar") || activeAddress.includes("doha");
+      
+      if (isQatar && cleanedPhone.length === 8) {
+        phoneWithCountry = `974${cleanedPhone}`;
+      } else if (!isQatar && cleanedPhone.length === 10) {
+        phoneWithCountry = `91${cleanedPhone}`;
+      }
+    }
+    
+    return `https://wa.me/${phoneWithCountry || "919876543210"}?text=${encodeURIComponent(text)}`;
+  }, [invoice, customer, activeBusiness, phoneInput, upiId]);
 
   // Email Template Generator
   const emailTemplates = useMemo(() => {
@@ -88,6 +104,33 @@ export default function ShareInvoiceModal({ invoiceId, onClose }: ShareInvoiceMo
   const emailMailto = useMemo(() => {
     return `mailto:${emailInput || "billing@hadyratech.com"}?subject=${encodeURIComponent(emailTemplates.subject)}&body=${encodeURIComponent(emailTemplates.body)}`;
   }, [emailInput, emailTemplates]);
+
+  const handleCopyWhatsApp = () => {
+    if (!activeBusiness) return;
+    const clientName = customer ? customer.name : "Valued Customer";
+    const dueAmt = invoice.total_amount - invoice.amount_paid;
+    
+    let text = `Dear ${clientName},\n\nHope you are doing well. Please find summary of tax invoice *${invoice.invoice_number}* issued by *${activeBusiness.name}*:\n\n• Invoice Date: ${new Date(invoice.invoice_date).toLocaleDateString()}\n• Total Amount: ₹${invoice.total_amount.toFixed(2)}\n• Amount Paid: ₹${invoice.amount_paid.toFixed(2)}\n• Status: *${invoice.payment_status.toUpperCase()}*\n`;
+
+    if (dueAmt > 0) {
+      text += `• Due Balance: ₹${dueAmt.toFixed(2)}\n• UPI QR Code: upi://pay?pa=${upiId}&pn=${encodeURIComponent(activeBusiness.name)}&am=${invoice.total_amount.toFixed(2)}&cu=INR&tn=${invoice.invoice_number}\n`;
+    }
+
+    text += `\nThank you for choosing Hadyra Services!`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedWhatsApp(true);
+      setTimeout(() => setCopiedWhatsApp(false), 2000);
+    });
+  };
+
+  const handleCopyEmail = () => {
+    const text = `Subject: ${emailTemplates.subject}\n\n${emailTemplates.body}`;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedEmail(true);
+      setTimeout(() => setCopiedEmail(false), 2000);
+    });
+  };
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -144,17 +187,31 @@ export default function ShareInvoiceModal({ invoiceId, onClose }: ShareInvoiceMo
               placeholder="Country code + Number (e.g. 919876543210)"
               value={phoneInput}
               onChange={(e) => setPhoneInput(e.target.value)}
-              className="flex-1 px-4 py-2.5 rounded-xl glass-input"
+              className="flex-1 px-4 py-2.5 rounded-xl glass-input bg-slate-950/50 border border-slate-850 text-white placeholder-slate-600 focus:outline-none focus:border-brand-blue"
             />
-            <a
-              href={waLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-white font-bold rounded-xl transition flex items-center gap-2"
-            >
-              <Send className="w-4 h-4" />
-              WhatsApp Message
-            </a>
+            <div className="flex gap-1.5">
+              <a
+                href={waLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-white font-bold rounded-xl transition flex items-center gap-2"
+              >
+                <Send className="w-4 h-4" />
+                WhatsApp
+              </a>
+              <button
+                type="button"
+                onClick={handleCopyWhatsApp}
+                className="px-3 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-brand-gray hover:text-white rounded-xl transition flex items-center justify-center"
+                title="Copy WhatsApp message text"
+              >
+                {copiedWhatsApp ? (
+                  <Check className="w-4 h-4 text-emerald-400 animate-pulse" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -191,22 +248,36 @@ export default function ShareInvoiceModal({ invoiceId, onClose }: ShareInvoiceMo
               placeholder="customer@email.com"
               value={emailInput}
               onChange={(e) => setEmailInput(e.target.value)}
-              className="flex-1 px-4 py-2.5 rounded-xl glass-input"
+              className="flex-1 px-4 py-2.5 rounded-xl glass-input bg-slate-950/50 border border-slate-850 text-white placeholder-slate-600 focus:outline-none focus:border-brand-blue"
             />
-            <a
-              href={emailMailto}
-              className="px-4 py-2.5 bg-brand-blue hover:bg-blue-650 active:scale-[0.98] text-white font-bold rounded-xl transition flex items-center gap-2"
-            >
-              <Send className="w-4 h-4" />
-              Trigger Client Email
-            </a>
+            <div className="flex gap-1.5">
+              <a
+                href={emailMailto}
+                className="px-4 py-2.5 bg-brand-blue hover:bg-blue-650 active:scale-[0.98] text-white font-bold rounded-xl transition flex items-center gap-2"
+              >
+                <Send className="w-4 h-4" />
+                Email
+              </a>
+              <button
+                type="button"
+                onClick={handleCopyEmail}
+                className="px-3 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-brand-gray hover:text-white rounded-xl transition flex items-center justify-center"
+                title="Copy Email subject and body text"
+              >
+                {copiedEmail ? (
+                  <Check className="w-4 h-4 text-emerald-400 animate-pulse" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Info label */}
         <div className="p-3.5 bg-slate-950/40 border border-slate-900 rounded-2xl flex gap-2.5 text-[10px] text-brand-gray leading-normal">
           <AlertTriangle className="w-4.5 h-4.5 text-[#0A6CFF] flex-shrink-0" />
-          <p>Clicking sharing triggers redirects to WhatsApp Web or launches your system's default email agent (Outlook, Mail, Gmail) with prepopulated templates automatically. PDF attachment links are generated dynamically.</p>
+          <p>Clicking sharing triggers redirects to WhatsApp Web or launches your system's default email agent. If you don't have a default email client configured, use the Copy buttons next to the send triggers to copy the text to clipboard directly.</p>
         </div>
 
       </motion.div>
