@@ -481,7 +481,7 @@ export default function Inventory() {
                     <label className="text-slate-400 font-semibold">GST Rate (%)</label>
                     <select
                       value={taxRate}
-                      onChange={(e) => setTaxRate(parseInt(e.target.value) || 18)}
+                      onChange={(e) => setTaxRate(parseInt(e.target.value))}
                       className="w-full px-4 py-2.5 rounded-xl glass-input text-xs cursor-pointer"
                     >
                       <option value="0">0% Exempt</option>
