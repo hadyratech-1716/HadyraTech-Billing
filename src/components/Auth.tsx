@@ -11,7 +11,7 @@ export default function Auth() {
   const [email, setEmail] = useState("admin@hadyratech.com");
   const [password, setPassword] = useState("••••••••");
   const [name, setName] = useState("Saaqib");
-  const [companyName, setCompanyName] = useState("Hadyra Tech Hub");
+  const [companyName, setCompanyName] = useState("Hadyra Technology");
   const [role, setRole] = useState<"admin" | "employee">("admin");
   
   // OTP simulation states

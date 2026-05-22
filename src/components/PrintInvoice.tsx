@@ -245,8 +245,8 @@ export default function PrintInvoice({ invoiceId, onClose }: PrintInvoiceProps) 
               {/* Bank Details & Terms */}
               <div className="max-w-md text-[10px] text-slate-500 space-y-1 pt-1">
                 <span className="text-slate-800 font-bold block mb-1">TERMS & CONDITIONS:</span>
-                <p>1. Goods once sold will not be accepted back or exchanged.</p>
-                <p>2. Subject to Mumbai Jurisdiction authorities.</p>
+                <p>1. Software services rendered are non-refundable and subject to the service agreement.</p>
+                <p>2. Subject to Chennai (India) and Doha (Qatar) jurisdiction.</p>
                 <p>3. Payments are requested within 15 days of billing date.</p>
                 <div className="pt-2">
                   <span className="text-slate-800 font-bold block">BANK TRANSFER DIRECT DETAILS:</span>
@@ -312,7 +312,7 @@ export default function PrintInvoice({ invoiceId, onClose }: PrintInvoiceProps) 
             </div>
             <div className="text-right w-48 border-t border-slate-300 pt-4">
               <span className="font-bold text-slate-800 block">AUTHORIZED SIGNATORY</span>
-              <p className="text-[8px] text-slate-400 mt-2">HADYRA TECHNOLOGIES CO.</p>
+              <p className="text-[8px] text-slate-400 mt-2">HADYRA TECHNOLOGY</p>
             </div>
           </div>
 

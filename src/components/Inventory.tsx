@@ -30,7 +30,7 @@ export default function Inventory() {
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("Packaging Materials");
+  const [category, setCategory] = useState("Software Services");
   const [purchasePrice, setPurchasePrice] = useState(0);
   const [salesPrice, setSalesPrice] = useState(0);
   const [taxRate, setTaxRate] = useState(18);
@@ -94,7 +94,7 @@ export default function Inventory() {
     setSku("");
     setBarcode(`890${Math.floor(1000000000 + Math.random() * 9000000000)}`); // Random standard barcode
     setDescription("");
-    setCategory("Packaging Materials");
+    setCategory("Software Services");
     setPurchasePrice(0);
     setSalesPrice(0);
     setTaxRate(18);
@@ -394,7 +394,7 @@ export default function Inventory() {
                   <input
                     type="text"
                     required
-                    placeholder="Bubble Wrap rolls (50m)"
+                    placeholder="Enterprise SaaS License (1-Year)"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-xl glass-input text-xs"
@@ -431,7 +431,7 @@ export default function Inventory() {
                     <label className="text-slate-400 font-semibold">Description</label>
                     <input
                       type="text"
-                      placeholder="High density fragile bubble rolls"
+                      placeholder="1-year enterprise license or cloud hosting package"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       className="w-full px-4 py-2.5 rounded-xl glass-input text-xs"
@@ -444,11 +444,11 @@ export default function Inventory() {
                       onChange={(e) => setCategory(e.target.value)}
                       className="w-full px-4 py-2.5 rounded-xl glass-input text-xs cursor-pointer"
                     >
-                      <option value="Packaging Materials">Packaging Materials</option>
-                      <option value="Software Licensing">Software Licensing</option>
-                      <option value="Groceries">Groceries</option>
-                      <option value="Hardware">Hardware</option>
-                      <option value="Retail Supplies">Retail Supplies</option>
+                       <option value="Software Services">Software Services</option>
+                       <option value="Software Licensing">Software Licensing</option>
+                       <option value="Cloud Services">Cloud Services</option>
+                       <option value="Support Contracts">Support Contracts</option>
+                       <option value="Hardware & Devices">Hardware & Devices</option>
                     </select>
                   </div>
                 </div>
