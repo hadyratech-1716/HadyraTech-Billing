@@ -132,7 +132,15 @@ export interface DbContextType {
   authorizedUsers: AuthorizedUser[];
   syncStatus: "idle" | "syncing" | "synced" | "error";
   syncError: string | null;
-  firebaseConfig: { apiKey: string; projectId: string; appId: string } | null;
+  firebaseConfig: { 
+    apiKey: string; 
+    projectId: string; 
+    appId: string;
+    authDomain?: string;
+    storageBucket?: string;
+    messagingSenderId?: string;
+    measurementId?: string;
+  } | null;
   
   // Auth actions
   login: (email: string, role: "admin" | "employee", customName?: string, customCompanyName?: string) => boolean;
@@ -169,7 +177,14 @@ export interface DbContextType {
   clearLogs: () => void;
   
   // Sync & settings
-  saveFirebaseConfig: (apiKey: string, projectId: string, appId: string) => Promise<boolean>;
+  saveFirebaseConfig: (
+    apiKey: string,
+    projectId: string,
+    appId: string,
+    storageBucket?: string,
+    messagingSenderId?: string,
+    measurementId?: string
+  ) => Promise<boolean>;
   disconnectFirebase: () => void;
   syncToCloud: () => Promise<void>;
   exportBackup: () => void;
@@ -558,7 +573,15 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "synced" | "error">("idle");
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [firebaseConfig, setFirebaseConfig] = useState<{ apiKey: string; projectId: string; appId: string } | null>(null);
+  const [firebaseConfig, setFirebaseConfig] = useState<{ 
+    apiKey: string; 
+    projectId: string; 
+    appId: string;
+    authDomain?: string;
+    storageBucket?: string;
+    messagingSenderId?: string;
+    measurementId?: string;
+  } | null>(null);
   const [firebaseDb, setFirebaseDb] = useState<any>(null);
 
   // Load from LocalStorage or seed mock data
@@ -572,6 +595,22 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const storedInvoices = localStorage.getItem("hadyra_invoices");
     const storedExpenses = localStorage.getItem("hadyra_expenses");
     const storedLogs = localStorage.getItem("hadyra_logs");
+    // Seed default/provided Firebase config if not initialized
+    const isInitialized = localStorage.getItem("hadyra_firebase_initialized");
+    if (!isInitialized) {
+      const defaultFirebase = {
+        apiKey: "AIzaSyB25DqMxCaLsY-6B2caADkp1pzoudc7-do",
+        authDomain: "hadyrapos.firebaseapp.com",
+        projectId: "hadyrapos",
+        storageBucket: "hadyrapos.firebasestorage.app",
+        messagingSenderId: "103191473870",
+        appId: "1:103191473870:web:66ca483f2b59832c9cea9f",
+        measurementId: "G-CTHQNEQELE"
+      };
+      localStorage.setItem("hadyra_firebase_config", JSON.stringify(defaultFirebase));
+      localStorage.setItem("hadyra_firebase_initialized", "true");
+    }
+
     const storedFirebase = localStorage.getItem("hadyra_firebase_config");
     const storedAuthorizedUsers = localStorage.getItem("hadyra_authorized_users");
 
@@ -581,11 +620,12 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         setFirebaseConfig(parsed);
         const config = {
           apiKey: parsed.apiKey,
-          authDomain: `${parsed.projectId}.firebaseapp.com`,
+          authDomain: parsed.authDomain || `${parsed.projectId}.firebaseapp.com`,
           projectId: parsed.projectId,
-          storageBucket: `${parsed.projectId}.appspot.com`,
-          messagingSenderId: "",
-          appId: parsed.appId
+          storageBucket: parsed.storageBucket || `${parsed.projectId}.appspot.com`,
+          messagingSenderId: parsed.messagingSenderId || "",
+          appId: parsed.appId,
+          measurementId: parsed.measurementId || ""
         };
         let app;
         if (getApps().length === 0) {
@@ -1257,7 +1297,14 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   };
 
   // Firebase Custom Config
-  const saveFirebaseConfig = async (apiKey: string, projectId: string, appId: string): Promise<boolean> => {
+  const saveFirebaseConfig = async (
+    apiKey: string,
+    projectId: string,
+    appId: string,
+    storageBucket?: string,
+    messagingSenderId?: string,
+    measurementId?: string
+  ): Promise<boolean> => {
     try {
       setSyncStatus("syncing");
       setSyncError(null);
@@ -1265,9 +1312,10 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         apiKey,
         authDomain: `${projectId}.firebaseapp.com`,
         projectId,
-        storageBucket: `${projectId}.appspot.com`,
-        messagingSenderId: "",
-        appId
+        storageBucket: storageBucket || `${projectId}.appspot.com`,
+        messagingSenderId: messagingSenderId || "",
+        appId,
+        measurementId: measurementId || ""
       };
       
       let app;
@@ -1315,9 +1363,19 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         console.error("Failed to sync authorized users on connection:", err);
       }
 
-      setFirebaseConfig({ apiKey, projectId, appId });
+      const savedConfig = {
+        apiKey,
+        projectId,
+        appId,
+        authDomain: `${projectId}.firebaseapp.com`,
+        storageBucket: storageBucket || `${projectId}.appspot.com`,
+        messagingSenderId: messagingSenderId || "",
+        measurementId: measurementId || ""
+      };
+
+      setFirebaseConfig(savedConfig);
       setFirebaseDb(db);
-      localStorage.setItem("hadyra_firebase_config", JSON.stringify({ apiKey, projectId, appId }));
+      localStorage.setItem("hadyra_firebase_config", JSON.stringify(savedConfig));
       setSyncStatus("synced");
       setSyncError(null);
       addLogLocal("CLOUD_CONNECT", `Connected to cloud database (Firestore): ${projectId}`);
