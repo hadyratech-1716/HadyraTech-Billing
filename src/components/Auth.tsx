@@ -8,10 +8,10 @@ import { motion, AnimatePresence } from "framer-motion";
 export default function Auth() {
   const { login } = useDb();
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("admin@hadyratech.com");
-  const [password, setPassword] = useState("••••••••");
-  const [name, setName] = useState("Saaqib");
-  const [companyName, setCompanyName] = useState("Hadyra Technology");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [role, setRole] = useState<"admin" | "employee">("admin");
   
   // OTP simulation states
@@ -44,13 +44,13 @@ export default function Auth() {
     setLoginError(null);
     let success = false;
     if (isLogin) {
-      success = login(email, role);
+      success = login(email, password);
     } else {
-      success = login(email, role, name, companyName);
+      success = login(email, password, "admin", name, companyName);
     }
     
     if (!success) {
-      setLoginError("Access denied: Your email is not authorized to access Hadyra Billing. Please contact your system Administrator.");
+      setLoginError("Access denied: Invalid credentials, or your email is not authorized to access Hadyra Billing. Please contact your system Administrator.");
       setStep("credentials");
       setOtpCode(["", "", "", "", "", ""]);
     }
@@ -72,9 +72,11 @@ export default function Auth() {
   const triggerQuickLogin = (selectedRole: "admin" | "employee") => {
     setLoginError(null);
     const targetEmail = selectedRole === "admin" ? "admin@hadyratech.com" : "sales@hadyratech.com";
+    const targetPassword = selectedRole === "admin" ? "admin123" : "sales123";
     setRole(selectedRole);
     setEmail(targetEmail);
-    const success = login(targetEmail, selectedRole);
+    setPassword(targetPassword);
+    const success = login(targetEmail, targetPassword);
     if (!success) {
       setLoginError(`Quick login failed. User ${targetEmail} is not authorized.`);
     }
@@ -240,47 +242,6 @@ export default function Auth() {
                       />
                     </div>
                   </div>
-
-                  {/* Role picker for mock auth */}
-                  {isLogin && (
-                    <div className="space-y-1.5 pt-1">
-                      <label className="text-xs font-semibold text-slate-400">Role Permissions</label>
-                      <div className="grid grid-cols-2 gap-3">
-                        <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
-                          role === "admin" 
-                            ? "bg-[#071B3B]/60 border-brand-blue/50 text-white" 
-                            : "border-slate-800 text-brand-gray bg-slate-950/20"
-                        }`}>
-                          <input 
-                            type="radio" 
-                            name="role" 
-                            value="admin" 
-                            checked={role === "admin"}
-                            onChange={() => setRole("admin")}
-                            className="hidden" 
-                          />
-                          <CheckCircle className={`w-3.5 h-3.5 ${role === "admin" ? "text-brand-blue" : "text-transparent border border-slate-700 rounded-full"}`} />
-                          Administrator
-                        </label>
-                        <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
-                          role === "employee" 
-                            ? "bg-[#071B3B]/60 border-brand-blue/50 text-white" 
-                            : "border-slate-800 text-brand-gray bg-slate-950/20"
-                        }`}>
-                          <input 
-                            type="radio" 
-                            name="role" 
-                            value="employee" 
-                            checked={role === "employee"}
-                            onChange={() => setRole("employee")}
-                            className="hidden" 
-                          />
-                          <CheckCircle className={`w-3.5 h-3.5 ${role === "employee" ? "text-brand-blue" : "text-transparent border border-slate-700 rounded-full"}`} />
-                          Employee
-                        </label>
-                      </div>
-                    </div>
-                  )}
 
                   {/* Submit button */}
                   <button

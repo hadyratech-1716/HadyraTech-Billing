@@ -115,6 +115,7 @@ export interface AuditLog {
 export interface AuthorizedUser {
   id: string;
   email: string;
+  password?: string;
   full_name: string;
   role: "admin" | "employee";
   created_at: string;
@@ -143,9 +144,9 @@ export interface DbContextType {
   } | null;
   
   // Auth actions
-  login: (email: string, role: "admin" | "employee", customName?: string, customCompanyName?: string) => boolean;
+  login: (email: string, password?: string, role?: "admin" | "employee", customName?: string, customCompanyName?: string) => boolean;
   logout: () => void;
-  addAuthorizedUser: (email: string, fullName: string, role: "admin" | "employee") => AuthorizedUser;
+  addAuthorizedUser: (email: string, fullName: string, role: "admin" | "employee", password?: string) => AuthorizedUser;
   updateAuthorizedUser: (id: string, updates: Partial<AuthorizedUser>) => void;
   deleteAuthorizedUser: (id: string) => void;
   
@@ -537,6 +538,7 @@ const MOCK_AUTHORIZED_USERS: AuthorizedUser[] = [
   {
     id: "auth-1",
     email: "admin@hadyratech.com",
+    password: "admin123",
     full_name: "Saaqib",
     role: "admin",
     created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -544,6 +546,7 @@ const MOCK_AUTHORIZED_USERS: AuthorizedUser[] = [
   {
     id: "auth-2",
     email: "sales@hadyratech.com",
+    password: "sales123",
     full_name: "Vikram Mehta",
     role: "employee",
     created_at: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString()
@@ -779,7 +782,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Auth Operations
   const login = (
     email: string,
-    role: "admin" | "employee",
+    password?: string,
+    role?: "admin" | "employee",
     customName?: string,
     customCompanyName?: string
   ): boolean => {
@@ -788,8 +792,8 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       (u) => u.email.trim().toLowerCase() === email.trim().toLowerCase()
     );
 
-    let resolvedRole = role;
-    let resolvedName = customName || (role === "admin" ? "Saaqib" : "Vikram Mehta");
+    let resolvedRole = role || matchedUser?.role || "employee";
+    let resolvedName = customName || matchedUser?.full_name || (resolvedRole === "admin" ? "Saaqib" : "Vikram Mehta");
     let businessId = activeBusiness?.id || "bus-1";
 
     if (customCompanyName) {
@@ -829,6 +833,7 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       const newAuthUser: AuthorizedUser = {
         id: `auth-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         email: email.trim().toLowerCase(),
+        password: password || "admin123",
         full_name: resolvedName.trim(),
         role: "admin",
         created_at: new Date().toISOString()
@@ -846,6 +851,23 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       if (!matchedUser) {
         return false;
       }
+      // Verify Password
+      const storedPassword = matchedUser.password || (matchedUser.role === "admin" ? "admin123" : "sales123");
+      if (password && password !== storedPassword) {
+        return false;
+      }
+
+      // Automatically migrate/store password for legacy user profiles that were initialized without password keys
+      if (!matchedUser.password && password) {
+        matchedUser.password = password;
+        const updated = authorizedUsers.map((u) => u.id === matchedUser.id ? { ...u, password } : u);
+        setAuthorizedUsers(updated);
+        saveLocal("authorized_users", updated);
+        if (firebaseDb) {
+          writeToFirestore("authorized_users", matchedUser.id, matchedUser);
+        }
+      }
+
       resolvedRole = matchedUser.role;
       resolvedName = matchedUser.full_name;
     }
@@ -876,11 +898,13 @@ export const DbProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const addAuthorizedUser = (
     email: string,
     fullName: string,
-    role: "admin" | "employee"
+    role: "admin" | "employee",
+    password?: string
   ): AuthorizedUser => {
     const newUser: AuthorizedUser = {
       id: `auth-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       email: email.trim().toLowerCase(),
+      password: password || (role === "admin" ? "admin123" : "sales123"),
       full_name: fullName.trim(),
       role,
       created_at: new Date().toISOString()

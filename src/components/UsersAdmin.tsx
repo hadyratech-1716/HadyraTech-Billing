@@ -21,6 +21,7 @@ export default function UsersAdmin() {
   // Form states
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "employee">("employee");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
@@ -37,8 +38,8 @@ export default function UsersAdmin() {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!email || !fullName) {
-      setErrorMsg("Please fill out all fields.");
+    if (!email || !fullName || !password) {
+      setErrorMsg("Please fill out all fields, including the initial password.");
       return;
     }
 
@@ -49,11 +50,12 @@ export default function UsersAdmin() {
       return;
     }
 
-    addAuthorizedUser(emailLower, fullName.trim(), role);
+    addAuthorizedUser(emailLower, fullName.trim(), role, password.trim());
     
     // Reset and close
     setEmail("");
     setFullName("");
+    setPassword("");
     setRole("employee");
     setShowAddModal(false);
   };
@@ -62,14 +64,21 @@ export default function UsersAdmin() {
     e.preventDefault();
     if (!showEditModal) return;
 
-    updateAuthorizedUser(showEditModal.id, {
+    const updates: Partial<AuthorizedUser> = {
       full_name: fullName.trim(),
       role: role
-    });
+    };
+
+    if (password.trim()) {
+      updates.password = password.trim();
+    }
+
+    updateAuthorizedUser(showEditModal.id, updates);
 
     setShowEditModal(null);
     setEmail("");
     setFullName("");
+    setPassword("");
     setRole("employee");
   };
 
@@ -77,6 +86,7 @@ export default function UsersAdmin() {
     setShowEditModal(user);
     setFullName(user.full_name);
     setEmail(user.email);
+    setPassword("");
     setRole(user.role);
   };
 
@@ -104,7 +114,7 @@ export default function UsersAdmin() {
           </p>
         </div>
         <button
-          onClick={() => { setErrorMsg(null); setShowAddModal(true); }}
+          onClick={() => { setErrorMsg(null); setPassword(""); setShowAddModal(true); }}
           className="flex items-center gap-2 px-5 py-3 rounded-xl bg-brand-blue hover:bg-blue-600 active:scale-[0.98] text-white font-semibold text-sm transition shadow-[0_4px_20px_rgba(10,108,255,0.25)] flex-shrink-0"
         >
           <UserPlus className="w-4 h-4" />
@@ -401,6 +411,21 @@ service cloud.firestore {
                   </div>
                 </div>
 
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-400">Login Password</label>
+                  <div className="relative">
+                    <Key className="w-4 h-4 text-brand-gray absolute left-3.5 top-3.5" />
+                    <input
+                      type="password"
+                      required
+                      placeholder="Enter user's password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 text-sm rounded-xl glass-input"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2 pt-1">
                   <label className="text-xs font-semibold text-slate-400">System Role & Permissions</label>
                   <div className="grid grid-cols-2 gap-3">
@@ -521,6 +546,20 @@ service cloud.firestore {
                       disabled
                       value={email}
                       className="w-full pl-10 pr-4 py-3 text-sm rounded-xl bg-slate-950 border border-slate-900 text-slate-500 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-400">New Password (Leave blank to keep current)</label>
+                  <div className="relative">
+                    <Key className="w-4 h-4 text-brand-gray absolute left-3.5 top-3.5" />
+                    <input
+                      type="password"
+                      placeholder="Enter new password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 text-sm rounded-xl glass-input"
                     />
                   </div>
                 </div>
